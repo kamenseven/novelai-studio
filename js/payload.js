@@ -4,6 +4,7 @@ import { MODEL_MAP, capsFor, inpaintModelFor, estimateAnlas } from './config.js'
 import { preparePrompt, withUCPreset, estimateTokens } from './prompt.js';
 import { blobToB64 } from './api.js';
 import { applyPromptTransforms } from './plugins.js';
+import { getActiveStyle, buildStyledPrompt, buildStyledNegative } from './styles.js';
 
 export function effectiveModel(state) {
   return state.model;
@@ -13,10 +14,17 @@ export function effectiveParams(state) {
   const model = effectiveModel(state);
   const caps = capsFor(model);
   const medium = model === 'nai-diffusion-5-full-medium';
+  const style = getActiveStyle(state, model);
+  let steps = medium ? 14 : Math.round(Number(state.steps) || caps.stepsDefault);
+  let scale = Number(state.scale) || caps.scaleDefault;
+  if (style) {
+    if (!medium && style.steps != null && style.steps !== '') steps = Math.max(1, Math.round(Number(style.steps)));
+    if (style.scale != null && style.scale !== '') scale = Math.max(0, Number(style.scale));
+  }
   return {
     model,
-    steps: medium ? 14 : Math.round(Number(state.steps) || caps.stepsDefault),
-    scale: Number(state.scale) || caps.scaleDefault,
+    steps,
+    scale,
     sampler: medium ? 'k_euler_ancestral' : state.sampler,
     schedule: caps.noiseSchedule ? state.schedule : 'karras',
     uc: medium ? 'heavy' : state.uc,
@@ -30,15 +38,18 @@ export async function buildRequest(state, { baseImage, mask, actionOverride } = 
   const model = effectiveModel(state);
   const caps = capsFor(model);
   const ep = effectiveParams(state);
+  const style = getActiveStyle(state, model);
   const isInpaint = actionOverride ? actionOverride === 'infill' : state.mode === 'inpaint';
   const isI2I = actionOverride ? actionOverride === 'img2img' : state.mode === 'i2i';
 
   const prompt = applyPromptTransforms(
-    preparePrompt(state.prompt, model, { quality: state.quality, furry: state.furry }),
+    preparePrompt(buildStyledPrompt(style, state.prompt), model, { quality: state.quality, furry: state.furry }),
     state,
   );
   const medium = model === 'nai-diffusion-5-full-medium';
-  const negative = medium ? withUCPreset('', model, 'heavy') : withUCPreset(state.negative, model, ep.uc);
+  const negative = medium
+    ? withUCPreset('', model, 'heavy')
+    : withUCPreset(buildStyledNegative(style, state.negative), model, ep.uc);
   const seed = state.seed === '' || state.seed == null ? undefined : Math.trunc(Number(state.seed)) || 0;
 
   const chars = (state.characters || []).filter((c) => c && c.prompt && c.prompt.trim());
@@ -178,6 +189,7 @@ export async function buildRequest(state, { baseImage, mask, actionOverride } = 
       seed,
       nSamples: ep.sampleCount,
       tokens: estimateTokens(prompt),
+      styleName: style?.name || null,
       anlas: estimateAnlas({
         width: params.width,
         height: params.height,

@@ -20,7 +20,10 @@
 
 - 提示词：质量标签（标准/轻量/关闭）、Undesired Content 预设（Heavy/Light/Human/Furry/None）、负面提示词
 - NovelAI 提示词语法高亮：`{加强}`、`[减弱]`、`1.5::数值强调::`、`||随机选项||`、`Text:` 文字块
-- 实时 Tag 补全（走官方 `suggest-tags` 接口）+ 提示词片段 `@名称`
+- 实时 Tag 补全：内置 2 万条 Danbooru 标签（分类 + 热度，本地秒出）+ 官方 `suggest-tags` 长尾合并；可打开 Tag 词典浏览/筛选
+- 风格模板：前缀 / 后缀 / 风格负面，可限定适用模型系列（V5/V4.5/V4/V3/Furry），可覆盖步数与 CFG，支持导入导出
+- 批量矩阵：角色 × 服装 × 动作 × 风格自由组合、任务队列逐张生成、暂停/继续（刷新后续跑）、批次结果聚合
+- 提示词片段 `@名称`
 - 分辨率：竖/横/方 + 小/标准/大 + 自定义，64 的倍数与 4MP 上限校验
 - 步数、Prompt Guidance、采样器、噪声调度、种子（随机/锁定）、张数、CFG Rescale、SMEA/SMEA DYN/Auto SMEA、Dynamic Thresholding
 - 多角色提示词：V4/V4.5 最多 6 个 + 5×5 网格定位；V5 最多 32 个 + 自由拖拽定位
@@ -95,12 +98,15 @@ js/
   api.js                 NovelAI API：生成/流式/放大/导演/vibe 编码/账号/补全 + ZIP/PNG 元数据
   payload.js             根据 UI 状态构造官方请求体（params_version 4）
   prompt.js              提示词高亮、随机器、token 估算、Tag 补全定位
+  styles.js              风格模板（前缀/后缀/负面/模型限定/参数覆盖）
+  tags.js                本地 Danbooru 标签检索
   state.js               状态、持久化、图库/资源 IndexedDB、预设
   actions.js             共享图片操作（下载/载入/放大/增强/导演/收藏）
   ui.js                  通用组件（modal/toast/slider/segmented/viewer）
   plugins.js             插件注册表
-  views/                 生成 / 图库 / 工具 / 设置
+  views/                 生成 / 图库 / 批量 / 工具 / 设置
 plugins/                 自定义扩展（index.js 引入）
+data/tags.json           Danbooru 热度前 2 万标签（本地补全）
 sw.js                    PWA 离线壳缓存
 manifest.webmanifest
 dev/                     开发/测试脚本（不参与部署也可保留）

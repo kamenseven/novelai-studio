@@ -72,6 +72,7 @@ export function reuseSettings(rec) {
   const meta = rec.meta || {};
   const patch = metaToSettings(meta);
   Object.assign(state, patch);
+  state.activeStyleId = null;
   if (meta.width && meta.height) {
     state.aspect = 'custom';
     state.size = 'custom';

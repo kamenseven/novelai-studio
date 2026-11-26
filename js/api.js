@@ -444,7 +444,9 @@ export async function suggestTags(model, prompt, signal) {
     timeout: 20000,
   });
   const data = JSON.parse(new TextDecoder().decode(buf));
-  const tags = (data.tags || []).map((x) => x.tag).filter(Boolean);
+  const tags = (data.tags || [])
+    .filter((x) => x.tag)
+    .map((x) => ({ tag: x.tag, label: x.tag, count: Number(x.count) || 0, source: 'api' }));
   tagCache.set(key, tags);
   if (tagCache.size > 200) tagCache.delete(tagCache.keys().next().value);
   return tags;

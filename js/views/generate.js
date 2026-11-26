@@ -12,8 +12,12 @@ import {
 import { buildRequest, effectiveModel, effectiveParams } from '../payload.js';
 import { generateImage, encodeVibe, suggestTags, blobToB64 } from '../api.js';
 import {
-  highlightHTML, estimateTokens, tokenLimit, tagFragmentAt, insertTag, preparePrompt, plainPrompt,
+  tagFragmentAt, insertTag, highlightHTML, estimateTokens, tokenLimit, preparePrompt, plainPrompt,
 } from '../prompt.js';
+import {
+  STYLE_FAMILIES, styleApplies, getActiveStyle, newStyle, sampleStyles,
+} from '../styles.js';
+import { loadTags, searchTags, formatTagCount, TAG_CATEGORIES } from '../tags.js';
 import {
   $, $$, el, svg, escapeHTML, clamp, debounce, uuid, randomSeed, dataURLToBlob,
   blobToDataURL, loadImage, canvasToBlob, fitReferenceCanvas, downloadBlob, sanitizeFilename, t, idb,
@@ -39,6 +43,9 @@ export function mount(container) {
     effortBtn: $('#effortBtn', container),
     furryBtn: $('#furryBtn', container),
     transparentBtn: $('#transparentBtn', container),
+    styleBtn: $('#styleBtn', container),
+    styleName: $('#styleName', container),
+    tagBtn: $('#tagBtn', container),
     modeTabs: $('#modeTabs', container),
     prompt: $('#promptInput', container),
     hl: $('#promptHL', container),
@@ -120,6 +127,17 @@ function template() {
         </div>
       </div>
 
+      <div class="style-bar card">
+        <button class="style-pick" id="styleBtn">
+          <span class="style-mark">${svg('spark')}</span>
+          <span class="style-info">
+            <span class="style-caption">风格模板</span>
+            <span class="style-name" id="styleName">无风格</span>
+          </span>
+          <span class="style-chev">${svg('chevron')}</span>
+        </button>
+      </div>
+
       <div class="mode-tabs" id="modeTabs">
         <button class="mode-tab active" data-mode="t2i"><span>文生图</span></button>
         <button class="mode-tab" data-mode="i2i"><span>图生图</span></button>
@@ -143,7 +161,10 @@ function template() {
           <label class="mini-field">质量
             <select id="qualitySel" class="mini-select"></select>
           </label>
-          <button class="mini-toggle" id="negToggle">负面提示词 <span class="chev">${svg('chevron')}</span></button>
+          <div class="prompt-bar-actions">
+            <button class="mini-toggle" id="tagBtn" title="Tag 词典">Tag</button>
+            <button class="mini-toggle" id="negToggle">负面提示词 <span class="chev">${svg('chevron')}</span></button>
+          </div>
         </div>
         <div class="neg-wrap" id="negWrap" hidden>
           <div class="neg-head">
@@ -266,6 +287,8 @@ function bind(ui) {
   const { els } = ui;
 
   els.modelBtn.addEventListener('click', () => openModelSheet(ui));
+  els.styleBtn.addEventListener('click', () => openStyleSheet(ui));
+  els.tagBtn.addEventListener('click', () => openTagBrowser(ui));
   els.effortBtn.addEventListener('click', () => {
     const medium = state.model === 'nai-diffusion-5-full-medium';
     if (!medium && state.model !== 'nai-diffusion-5-full') return;
@@ -404,6 +427,7 @@ function bind(ui) {
 
 function renderAll(ui) {
   renderHeader(ui);
+  renderStyleBar(ui);
   renderQualityOptions(ui);
   elsSet(ui, 'prompt', state.prompt);
   elsSet(ui, 'negative', state.negative);
@@ -449,6 +473,314 @@ function renderHeader(ui) {
   els.genBtn.classList.toggle('busy', busy > 0);
 
   renderHeaderActions(ui);
+}
+
+function renderStyleBar(ui) {
+  const model = effectiveModel(state);
+  const selected = state.styles.find((s) => s.id === state.activeStyleId);
+  const style = getActiveStyle(state, model);
+  const nameEl = ui.els.styleName;
+  if (!selected) {
+    nameEl.textContent = '无风格';
+    nameEl.classList.remove('warn-text');
+  } else if (!style) {
+    nameEl.textContent = `${selected.name}（不适用当前模型）`;
+    nameEl.classList.add('warn-text');
+  } else {
+    const bits = [];
+    if (style.steps != null && style.steps !== '') bits.push(`${style.steps} 步`);
+    if (style.scale != null && style.scale !== '') bits.push(`CFG ${style.scale}`);
+    nameEl.textContent = style.name + (bits.length ? ` · ${bits.join(' / ')}` : '');
+    nameEl.classList.remove('warn-text');
+  }
+  ui.els.styleBtn.classList.toggle('active', !!style);
+}
+
+function openStyleSheet(ui) {
+  const body = el('div', { class: 'style-sheet' });
+  const list = el('div', { class: 'style-list' });
+  const model = effectiveModel(state);
+  const renderList = () => {
+    list.innerHTML = '';
+    const none = el('button', { class: `style-row ${!state.activeStyleId ? 'active' : ''}` },
+      el('span', { class: 'style-row-main' },
+        el('span', { class: 'style-row-name' }, '无风格'),
+        el('span', { class: 'style-row-sub' }, '只使用当前提示词')),
+      !state.activeStyleId ? el('span', { class: 'style-check' }, svg('check')) : null);
+    none.addEventListener('click', () => {
+      state.activeStyleId = null;
+      save();
+      close();
+      renderAll(ui);
+    });
+    list.append(none);
+    for (const style of state.styles) {
+      const applies = styleApplies(style, model);
+      const active = state.activeStyleId === style.id;
+      const row = el('div', { class: `style-row ${active ? 'active' : ''} ${applies ? '' : 'disabled'}` },
+        el('button', { class: 'style-row-pick' },
+          el('span', { class: 'style-row-main' },
+            el('span', { class: 'style-row-name' }, style.name || '未命名风格'),
+            el('span', { class: 'style-row-sub' }, styleSummary(style))),
+          active ? el('span', { class: 'style-check' }, svg('check')) : null),
+        el('div', { class: 'style-row-actions' },
+          iconBtn('sliders', () => {
+            close();
+            openStyleEditor(ui, style);
+          }, '编辑'),
+          iconBtn('trash', async () => {
+            if (await confirmDialog('删除风格', `确定删除「${style.name}」吗？`)) {
+              state.styles = state.styles.filter((s) => s.id !== style.id);
+              if (state.activeStyleId === style.id) state.activeStyleId = null;
+              save();
+              renderList();
+              renderAll(ui);
+            }
+          }, '删除')));
+      row.querySelector('.style-row-pick').addEventListener('click', () => {
+        if (!applies) {
+          toast('该风格未启用当前模型系列，可在编辑里调整适用范围', 'error', 3000);
+          return;
+        }
+        state.activeStyleId = style.id;
+        save();
+        close();
+        renderAll(ui);
+      });
+      list.append(row);
+    }
+    if (!state.styles.length) list.append(el('div', { class: 'hint' }, '还没有风格模板。新建一个，或用「示例」快速体验。'));
+  };
+  body.append(list);
+  const tools = el('div', { class: 'style-sheet-tools' },
+    el('button', { class: 'btn btn-sm', onclick: () => { close(); openStyleEditor(ui, null); } }, '新建'),
+    el('button', { class: 'btn btn-sm', onclick: () => {
+      state.styles.push(...sampleStyles());
+      save();
+      renderList();
+      renderAll(ui);
+      toast('已添加 3 个示例风格', 'ok');
+    } }, '示例'),
+    el('button', { class: 'btn btn-sm', onclick: () => importStyles(ui) }, '导入'),
+    el('button', { class: 'btn btn-sm', onclick: exportStyles }, '导出'));
+  body.append(tools);
+  body.append(el('p', { class: 'hint' }, '风格会在发送前拼成：前缀 + 提示词 + 后缀；负面提示词会与风格负面合并。可选覆盖步数 / CFG。'));
+  const m = modal({ title: '风格模板', body, wide: true });
+  const close = m.close;
+  renderList();
+}
+
+function styleSummary(style) {
+  const models = style.models?.length
+    ? style.models.map((id) => STYLE_FAMILIES.find((f) => f.id === id)?.label || id).join('/')
+    : '全部模型';
+  const bits = [models];
+  if (style.steps) bits.push(`${style.steps} 步`);
+  if (style.scale != null && style.scale !== '') bits.push(`CFG ${style.scale}`);
+  if (style.prefix) bits.push('有前缀');
+  if (style.suffix) bits.push('有后缀');
+  return bits.join(' · ');
+}
+
+function openStyleEditor(ui, style) {
+  const draft = style ? JSON.parse(JSON.stringify(style)) : newStyle();
+  const name = el('input', { class: 'input', value: draft.name, placeholder: '风格名称' });
+  const prefix = el('textarea', { class: 'input', rows: 2, placeholder: '前缀，例如 cinematic lighting, film grain' });
+  prefix.value = draft.prefix || '';
+  const suffix = el('textarea', { class: 'input', rows: 2, placeholder: '后缀，例如 depth of field, 35mm photo' });
+  suffix.value = draft.suffix || '';
+  const negative = el('textarea', { class: 'input', rows: 2, placeholder: '风格负面，例如 flat lighting' });
+  negative.value = draft.negative || '';
+  const steps = el('input', { class: 'input num', type: 'number', min: 1, max: 50, placeholder: '默认', value: draft.steps ?? '' });
+  const scale = el('input', { class: 'input num', type: 'number', min: 0, max: 10, step: 0.1, placeholder: '默认', value: draft.scale ?? '' });
+  const modelWrap = el('div', { class: 'style-models' });
+  const renderModels = () => {
+    modelWrap.innerHTML = '';
+    for (const f of STYLE_FAMILIES) {
+      const on = draft.models.includes(f.id);
+      const b = el('button', { class: `chip ${on ? 'active' : ''}`, type: 'button' }, f.label);
+      b.addEventListener('click', () => {
+        draft.models = on ? draft.models.filter((x) => x !== f.id) : [...draft.models, f.id];
+        renderModels();
+      });
+      modelWrap.append(b);
+    }
+  };
+  renderModels();
+  const body = el('div', { class: 'form-stack' },
+    el('div', { class: 'field' }, el('div', { class: 'field-label' }, '名称'), name),
+    el('div', { class: 'field' }, el('div', { class: 'field-label' }, '前缀 Prefix'), prefix),
+    el('div', { class: 'field' }, el('div', { class: 'field-label' }, '后缀 Suffix'), suffix),
+    el('div', { class: 'field' }, el('div', { class: 'field-label' }, '负面 Negative'), negative),
+    el('div', { class: 'field' },
+      el('div', { class: 'field-head' }, el('span', { class: 'field-label' }, '适用模型'), el('span', { class: 'field-hint' }, '不选=全部')),
+      modelWrap),
+    el('div', { class: 'row-line gap' },
+      el('div', { class: 'field' }, el('div', { class: 'field-label' }, '覆盖步数'), steps),
+      el('div', { class: 'field' }, el('div', { class: 'field-label' }, '覆盖 CFG'), scale)));
+  const actions = [
+    { label: '取消' },
+    {
+      label: style ? '保存' : '创建',
+      primary: true,
+      onClick: () => {
+        const nameVal = name.value.trim();
+        if (!nameVal) {
+          toast('请填写风格名称', 'error');
+          return false;
+        }
+        draft.name = nameVal;
+        draft.prefix = prefix.value.trim();
+        draft.suffix = suffix.value.trim();
+        draft.negative = negative.value.trim();
+        draft.steps = steps.value === '' ? null : Number(steps.value);
+        draft.scale = scale.value === '' ? null : Number(scale.value);
+        const idx = state.styles.findIndex((s) => s.id === draft.id);
+        if (idx >= 0) state.styles[idx] = draft;
+        else state.styles.push(draft);
+        state.activeStyleId = draft.id;
+        save();
+        renderAll(ui);
+        toast(style ? '风格已更新' : '风格已创建', 'ok');
+      },
+    },
+  ];
+  if (style) {
+    actions.unshift({
+      label: '删除',
+      danger: true,
+      onClick: () => {
+        state.styles = state.styles.filter((s) => s.id !== style.id);
+        if (state.activeStyleId === style.id) state.activeStyleId = null;
+        save();
+        renderAll(ui);
+        toast('风格已删除', 'ok');
+      },
+    });
+  }
+  modal({ title: style ? '编辑风格' : '新建风格', body, actions, wide: true });
+}
+
+function importStyles(ui) {
+  const input = el('input', { type: 'file', accept: '.json,application/json' });
+  input.addEventListener('change', async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      const arr = Array.isArray(data) ? data : data.styles;
+      if (!Array.isArray(arr)) throw new Error('格式不正确');
+      let added = 0;
+      for (const raw of arr) {
+        if (!raw || !raw.name) continue;
+        state.styles.push(newStyle({
+          name: String(raw.name).slice(0, 80),
+          prefix: String(raw.prefix || ''),
+          suffix: String(raw.suffix || ''),
+          negative: String(raw.negative || ''),
+          models: Array.isArray(raw.models) ? raw.models.filter((m) => STYLE_FAMILIES.some((f) => f.id === m)) : [],
+          steps: raw.steps ?? null,
+          scale: raw.scale ?? null,
+        }));
+        added++;
+      }
+      save();
+      toast(`已导入 ${added} 个风格`, 'ok');
+      if (ui?.container?.isConnected) renderAll(ui);
+    } catch (e) {
+      toast(`导入失败：${e.message}`, 'error');
+    }
+  });
+  input.click();
+}
+
+function exportStyles() {
+  if (!state.styles.length) return toast('没有可导出的风格', 'info');
+  const blob = new Blob([JSON.stringify({ type: 'nai-studio-styles', version: 1, styles: state.styles }, null, 2)], { type: 'application/json' });
+  downloadBlob(blob, 'nai-studio-styles.json');
+}
+
+function openTagBrowser(ui) {
+  const search = el('input', { class: 'input', placeholder: '搜索 Danbooru 标签，例如 silver hair / blush / 1girl' });
+  const cats = el('div', { class: 'seg seg-wrap' });
+  const results = el('div', { class: 'tag-browser-list' });
+  const status = el('div', { class: 'hint' }, '加载中…');
+  let category = 'all';
+  let query = '';
+  const catOptions = [{ id: 'all', label: '全部' }, ...Object.entries(TAG_CATEGORIES).map(([id, c]) => ({ id: String(id), label: c.label }))];
+
+  const renderCats = () => {
+    cats.innerHTML = '';
+    for (const c of catOptions) {
+      const b = el('button', { class: `seg ${category === c.id ? 'active' : ''}` }, c.label);
+      b.addEventListener('click', () => {
+        category = c.id;
+        renderCats();
+        renderResults();
+      });
+      cats.append(b);
+    }
+  };
+  const renderResults = () => {
+    const items = query ? searchTags(query, 200) : [];
+    const filtered = category === 'all' ? items : items.filter((x) => String(x.category) === category);
+    results.innerHTML = '';
+    if (!query) {
+      results.append(el('div', { class: 'hint' }, '输入至少一个字符开始搜索；数据来自 Danbooru 热度前 2 万标签。'));
+      return;
+    }
+    if (!filtered.length) {
+      results.append(el('div', { class: 'hint' }, '没有匹配的标签'));
+      return;
+    }
+    for (const item of filtered.slice(0, 80)) {
+      const cat = TAG_CATEGORIES[item.category] || TAG_CATEGORIES[0];
+      const row = el('button', { class: 'tag-browser-row' },
+        el('span', { class: 'tag-dot', style: { background: cat.color } }),
+        el('span', { class: 'tag-browser-name' }, item.label),
+        el('span', { class: 'tag-browser-cat' }, cat.label),
+        el('span', { class: 'tag-browser-count' }, formatTagCount(item.count)));
+      row.addEventListener('click', () => {
+        insertTagText(ui, item.tag);
+        toast(`已插入 ${item.tag}`, 'ok', 1200);
+      });
+      results.append(row);
+    }
+    status.textContent = `共 ${filtered.length} 个匹配`;
+  };
+
+  search.addEventListener('input', () => {
+    query = search.value.trim();
+    renderResults();
+  });
+  const body = el('div', { class: 'tag-browser' },
+    search,
+    cats,
+    el('div', { class: 'tag-browser-status' }, status),
+    results);
+  const m = modal({ title: 'Tag 词典', body, wide: true });
+  renderCats();
+  loadTags().then(() => {
+    status.textContent = '已加载本地标签库';
+    renderResults();
+    search.focus();
+  });
+}
+
+function insertTagText(ui, tag) {
+  const ta = ui.els.prompt;
+  const start = ta.selectionStart ?? ta.value.length;
+  const before = ta.value.slice(0, start);
+  const after = ta.value.slice(ta.selectionEnd ?? start);
+  const needsComma = before && !/[\s,]$/.test(before);
+  const insert = (needsComma ? ', ' : '') + tag + ', ';
+  ta.value = before + insert + after;
+  const pos = before.length + insert.length;
+  ta.setSelectionRange(pos, pos);
+  state.prompt = ta.value;
+  save();
+  updatePromptUI(ui);
+  ta.focus();
 }
 
 function renderHeaderActions(ui) {
@@ -1441,6 +1773,7 @@ async function enqueue(ui) {
   }
   if (state.mode === 'i2i' && !state.baseImage) return toast('请先上传图生图底图', 'error');
 
+  hideSuggest(ui);
   queue.push(1);
   updateQueue(ui);
   pump(ui);
@@ -1537,24 +1870,40 @@ function scheduleSuggest(ui) {
 async function runSuggest(ui) {
   const ta = ui.els.prompt;
   if (document.activeElement !== ta) return;
-  const frag = tagFragmentAt(ta.value, ta.selectionStart);
+  const caret = ta.selectionStart;
+  const value = ta.value;
+  const frag = tagFragmentAt(value, caret);
   if (!frag) return hideSuggest(ui);
   if (frag.query.startsWith('@')) {
     const q = frag.query.slice(1).toLowerCase();
     const items = state.chunks.filter((c) => c.name.toLowerCase().includes(q)).map((c) => ({ tag: c.text, label: c.name, kind: 'chunk' }));
     return showSuggest(ui, items, frag);
   }
-  if (frag.query.length < 2 || /[.!?。！？]/.test(frag.query)) return hideSuggest(ui);
+  const q = frag.query.trim();
+  if (!q || /[.!?。！？]/.test(q)) return hideSuggest(ui);
+
+  const stillCurrent = () => ta.value === value && ta.selectionStart === caret;
+  let local = [];
   try {
-    const tags = await suggestTags(state.model, frag.query);
-    const q = frag.query.toLowerCase();
-    const best = tags
-      .filter((t) => t.toLowerCase().startsWith(q) || t.toLowerCase().includes(q))
-      .slice(0, 8)
-      .map((tag) => ({ tag, label: tag }));
-    showSuggest(ui, best, frag);
+    await loadTags();
+    if (!stillCurrent()) return;
+    local = searchTags(q, 8);
+    if (local.length) {
+      const f = tagFragmentAt(ta.value, ta.selectionStart) || frag;
+      showSuggest(ui, local, f);
+    }
+  } catch {}
+
+  if (q.length < 2) return;
+  try {
+    const api = await suggestTags(effectiveModel(state), q);
+    if (!stillCurrent()) return;
+    const seen = new Set(local.map((x) => x.label.toLowerCase()));
+    const merged = [...local, ...api.filter((x) => !seen.has(x.label.toLowerCase()))].slice(0, 10);
+    const f = tagFragmentAt(ta.value, ta.selectionStart) || frag;
+    showSuggest(ui, merged, f);
   } catch {
-    hideSuggest(ui);
+    if (!local.length) hideSuggest(ui);
   }
 }
 
@@ -1565,6 +1914,12 @@ function showSuggest(ui, items, frag) {
   pop.hidden = false;
   pop.innerHTML = '';
   items.forEach((item, i) => {
+    const cat = item.category != null ? TAG_CATEGORIES[item.category] : null;
+    const meta = item.kind === 'chunk'
+      ? el('span', { class: 'tag-kind' }, '片段')
+      : el('span', { class: 'tag-meta' },
+          cat ? el('span', { class: 'tag-dot', style: { background: cat.color } }) : null,
+          item.count ? el('span', { class: 'tag-count' }, formatTagCount(item.count)) : null);
     const b = el('button', {
       class: `tag-item ${i === 0 ? 'active' : ''}`,
       type: 'button',
@@ -1572,7 +1927,7 @@ function showSuggest(ui, items, frag) {
         e.preventDefault();
         applySuggestion(ui, item);
       },
-    }, el('span', { class: 'tag-name' }, item.label), item.kind === 'chunk' ? el('span', { class: 'tag-kind' }, '片段') : null);
+    }, el('span', { class: 'tag-name' }, item.label), meta);
     pop.append(b);
   });
 }

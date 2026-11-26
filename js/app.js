@@ -7,12 +7,14 @@ import { loadPlugins } from './plugins.js';
 import { getUserData } from './api.js';
 import * as generate from './views/generate.js';
 import * as gallery from './views/gallery.js';
+import * as batch from './views/batch.js';
 import * as tools from './views/tools.js';
 import * as settings from './views/settings.js';
 
 const routes = {
   generate: { el: null, mount: generate.mount, title: '生成' },
   gallery: { el: null, mount: gallery.mount, title: '图库' },
+  batch: { el: null, mount: batch.mount, title: '批量' },
   tools: { el: null, mount: tools.mount, title: '工具' },
   settings: { el: null, mount: settings.mount, title: '设置' },
 };
@@ -75,6 +77,7 @@ function renderShell() {
     <nav class="tabbar">
       <button class="tab active" data-tab="generate">${svg('bolt')}<span>生成</span></button>
       <button class="tab" data-tab="gallery">${svg('image')}<span>图库</span></button>
+      <button class="tab" data-tab="batch">${svg('grid')}<span>批量</span></button>
       <button class="tab" data-tab="tools">${svg('wand')}<span>工具</span></button>
       <button class="tab" data-tab="settings">${svg('settings')}<span>设置</span></button>
     </nav>`;

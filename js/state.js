@@ -225,6 +225,8 @@ export async function saveToGallery(result, info = {}) {
     reqType: result.meta?.req_type || info.reqType || null,
     refs: info.refs || null,
     chars: info.chars || null,
+    batchId: info.batchId || null,
+    styleName: info.styleName || null,
     fav: false,
     size: result.blob.size,
   };
@@ -276,6 +278,7 @@ export function snapshot() {
     'model', 'effort', 'mode', 'prompt', 'negative', 'quality', 'uc', 'aspect', 'size', 'width', 'height',
     'steps', 'scale', 'sampler', 'schedule', 'seed', 'nSamples', 'sm', 'smDyn', 'dyn', 'cfgRescale',
     'autoSmea', 'transparent', 'furry', 'characters', 'charPosMode', 'i2i', 'inpaint', 'normalizeVibes',
+    'activeStyleId',
   ];
   const out = {};
   for (const k of keys) out[k] = structuredClone(state[k]);

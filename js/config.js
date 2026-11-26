@@ -403,6 +403,10 @@ export const DEFAULT_STATE = {
   furry: false,
   characters: [],
   charPosMode: 'ai',       // 'ai' | 'custom'
+  styles: [],
+  activeStyleId: null,
+  batch: { characters: [], outfits: [], actions: [], styleIds: [] },
+  batchJob: null,
   vibes: [],
   refs: [],
   i2i: { strength: 0.7, noise: 0 },
