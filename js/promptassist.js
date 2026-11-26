@@ -44,6 +44,71 @@ function cleanPlain(raw) {
   return s;
 }
 
+export function stripWeightSyntax(raw) {
+  return cleanPlain(raw);
+}
+
+export function parseSegmentWeight(raw) {
+  const s = (raw || '').trim();
+  const m = /^(-?\d+(?:\.\d+)?)::[\s\S]*::$/.exec(s);
+  if (m) return Number(m[1]);
+  let open = 0;
+  for (const ch of s) {
+    if (ch === '{') open++;
+    else if (ch === '[') open--;
+  }
+  if (open) return Math.pow(1.05, open);
+  return 1;
+}
+
+export function formatPrompt(text) {
+  if (!text) return text;
+  let t = text
+    .replace(/[，、]/g, ',')
+    .replace(/\u3000/g, ' ')
+    .replace(/_/g, ' ');
+  let textBlock = '';
+  const m = /(^|\n)\s*text\s*:\s*([\s\S]*)$/i.exec(t);
+  if (m) {
+    textBlock = 'Text: ' + m[2].trim();
+    t = t.slice(0, m.index);
+  }
+  const parts = splitTopLevel(t);
+  const out = [];
+  const seen = new Set();
+  for (const p of parts) {
+    let raw = p.raw.trim().replace(/\s+/g, ' ');
+    raw = raw.replace(/^[,\s]+|[,\s]+$/g, '');
+    if (!raw) continue;
+    const wm = /^(-?\d+(?:\.\d+)?)\s*::\s*([\s\S]*?)\s*::$/.exec(raw);
+    if (wm) {
+      raw = `${Number(wm[1]).toFixed(1)}::${wm[2].trim()}::`;
+    } else {
+      const plain = cleanPlain(raw);
+      if (plain) {
+        const info = tagInfo(plain);
+        if (info && plain !== plain.toLowerCase() && raw.includes(plain)) {
+          raw = raw.replace(plain, info.tag);
+        }
+      }
+    }
+    const key = cleanPlain(raw).toLowerCase();
+    if (key && seen.has(key)) continue;
+    if (key) seen.add(key);
+    out.push(raw);
+  }
+  let joined = out.join(', ');
+  const openC = (joined.match(/\{/g) || []).length;
+  const closeC = (joined.match(/\}/g) || []).length;
+  if (openC > closeC) joined += '}'.repeat(openC - closeC);
+  const openB = (joined.match(/\[/g) || []).length;
+  const closeB = (joined.match(/\]/g) || []).length;
+  if (openB > closeB) joined += ']'.repeat(openB - closeB);
+  if ((joined.match(/::/g) || []).length % 2 === 1) joined += '::';
+  if (textBlock) joined = (joined ? joined + '\n' : '') + textBlock;
+  return joined.trim();
+}
+
 function lookupOne(raw) {
   const plain = cleanPlain(raw);
   if (!plain) return null;
@@ -71,7 +136,20 @@ function describeSegment(raw) {
 
 export function analyzePrompt(text, { modelFamily = 'v5' } = {}) {
   if (!text || !tagsLoaded()) return { segments: [], issues: [], stats: { known: 0, translated: 0, unknown: 0 } };
-  const parts = splitTopLevel(text);
+  let src = text;
+  let textBlock = null;
+  const tm = /\btext\s*:\s*([\s\S]*)$/i.exec(text);
+  if (tm) {
+    src = text.slice(0, tm.index);
+    textBlock = {
+      kind: 'text',
+      text: tm[1].trim(),
+      raw: text.slice(tm.index),
+      start: tm.index,
+      end: text.length,
+    };
+  }
+  const parts = splitTopLevel(src);
   const segments = [];
   let known = 0;
   let translated = 0;
@@ -81,8 +159,9 @@ export function analyzePrompt(text, { modelFamily = 'v5' } = {}) {
     if (!p.raw.trim()) continue;
     const seg = describeSegment(p.raw);
     if (!seg) continue;
-    seg.start = p.start;
-    seg.end = p.end;
+    const lead = p.raw.length - p.raw.trimStart().length;
+    seg.start = p.start + lead;
+    seg.end = seg.start + p.raw.trim().length;
     segments.push(seg);
     const infos = seg.kind === 'tag' ? [seg.info] : (seg.parts || []).map((x) => x.info);
     for (const info of infos) {
@@ -92,6 +171,7 @@ export function analyzePrompt(text, { modelFamily = 'v5' } = {}) {
       } else unknown++;
     }
   }
+  if (textBlock && textBlock.text) segments.push(textBlock);
 
   const issues = [];
   const add = (issue) => issues.push(issue);

@@ -18,7 +18,7 @@ import {
   STYLE_FAMILIES, styleApplies, getActiveStyle, newStyle, sampleStyles,
 } from '../styles.js';
 import { loadTags, searchTags, formatTagCount, TAG_CATEGORIES } from '../tags.js';
-import { analyzePrompt, applyAllFixes } from '../promptassist.js';
+import { analyzePrompt, applyAllFixes, formatPrompt, parseSegmentWeight, stripWeightSyntax, splitTopLevel } from '../promptassist.js';
 import {
   $, $$, el, svg, escapeHTML, clamp, debounce, uuid, randomSeed, dataURLToBlob,
   blobToDataURL, loadImage, canvasToBlob, fitReferenceCanvas, downloadBlob, sanitizeFilename, t, idb,
@@ -47,6 +47,7 @@ export function mount(container) {
     styleBtn: $('#styleBtn', container),
     styleName: $('#styleName', container),
     tagBtn: $('#tagBtn', container),
+    formatBtn: $('#formatBtn', container),
     modeTabs: $('#modeTabs', container),
     prompt: $('#promptInput', container),
     hl: $('#promptHL', container),
@@ -170,6 +171,7 @@ function template() {
             <select id="qualitySel" class="mini-select"></select>
           </label>
           <div class="prompt-bar-actions">
+            <button class="mini-toggle" id="formatBtn" title="自动整理格式">格式化</button>
             <button class="mini-toggle" id="tagBtn" title="Tag 词典">Tag</button>
             <button class="mini-toggle" id="negToggle">负面提示词 <span class="chev">${svg('chevron')}</span></button>
           </div>
@@ -297,6 +299,15 @@ function bind(ui) {
   els.modelBtn.addEventListener('click', () => openModelSheet(ui));
   els.styleBtn.addEventListener('click', () => openStyleSheet(ui));
   els.tagBtn.addEventListener('click', () => openTagBrowser(ui));
+  els.formatBtn.addEventListener('click', async () => {
+    if (!state.prompt.trim()) return toast('提示词为空', 'info');
+    await loadTags();
+    const out = formatPrompt(state.prompt);
+    if (out === state.prompt) return toast('已经是整齐格式', 'info');
+    applyPromptFix(ui, out, '已格式化');
+  });
+  installWeightGestures(ui);
+  setupTextareaWeight(ui);
   els.effortBtn.addEventListener('click', () => {
     const medium = state.model === 'nai-diffusion-5-full-medium';
     if (!medium && state.model !== 'nai-diffusion-5-full') return;
@@ -934,9 +945,11 @@ async function renderPromptAssist(ui) {
     }
     const info = seg.info;
     if (!seg.plain) continue;
-    items.push(el('span', { class: `pa-item ${info ? '' : 'pa-unknown'}` },
+    const node = el('span', { class: `pa-item pa-weight ${info ? '' : 'pa-unknown'}`, title: '长按上下滑动调整权重' },
       el('span', { class: 'pa-tag' }, info?.tag || seg.plain),
-      info?.zh ? el('span', { class: 'pa-cn' }, info.zh) : null));
+      info?.zh ? el('span', { class: 'pa-cn' }, info.zh) : null);
+    bindChipWeight(node, ui, seg);
+    items.push(node);
   }
   if (!items.length) {
     els.paZh.append(el('span', { class: 'pa-empty' }, '未识别到可翻译的标签'));
@@ -946,6 +959,7 @@ async function renderPromptAssist(ui) {
       els.paZh.append(node);
     });
   }
+  els.paZh.append(el('span', { class: 'pa-hint' }, '长按标签上下滑动调权重'));
 
   // correction hints
   els.paIssues.innerHTML = '';
@@ -981,14 +995,192 @@ async function renderPromptAssist(ui) {
   }
 }
 
-function applyPromptFix(ui, newText) {
+function applyPromptFix(ui, newText, message = '已应用修正') {
   if (newText == null || newText === state.prompt) return;
   const ta = ui.els.prompt;
   ta.value = newText;
   state.prompt = newText;
   save();
   updatePromptUI(ui);
-  toast('已应用修正', 'ok', 1200);
+  toast(message, 'ok', 1200);
+}
+
+/* ------------------------------------------------ weight gesture (long press) */
+
+let weightDrag = null;
+let longPress = null;
+let weightHud = null;
+let gestureUI = null;
+let gesturesInstalled = false;
+
+function installWeightGestures(ui) {
+  gestureUI = ui;
+  if (gesturesInstalled) return;
+  gesturesInstalled = true;
+  window.addEventListener('pointermove', onWeightMove, { passive: false });
+  window.addEventListener('pointerup', onWeightEnd);
+  window.addEventListener('pointercancel', onWeightEnd);
+}
+
+function setupTextareaWeight(ui) {
+  const ta = ui.els.prompt;
+  ta.addEventListener('pointerdown', (e) => {
+    if (weightDrag) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const caret = ta.selectionStart;
+    const point = { x: e.clientX, y: e.clientY };
+    longPress = {
+      x: e.clientX,
+      y: e.clientY,
+      timer: setTimeout(() => {
+        if (!longPress) return;
+        const seg = segmentAtCaret(ta.value, caret);
+        longPress = null;
+        if (seg) beginWeight(ui, seg.start, seg.end, point.x, point.y);
+      }, 460),
+    };
+  });
+  ta.addEventListener('touchmove', (e) => {
+    if (weightDrag) e.preventDefault();
+  }, { passive: false });
+  ta.addEventListener('contextmenu', (e) => {
+    if (weightDrag || longPress) e.preventDefault();
+  });
+}
+
+function segmentAtCaret(text, caret) {
+  let best = null;
+  for (const p of splitTopLevel(text)) {
+    if (!p.raw.trim()) continue;
+    const lead = p.raw.length - p.raw.trimStart().length;
+    const start = p.start + lead;
+    const end = start + p.raw.trim().length;
+    if (caret >= start && caret <= end) return { start, end };
+    const d = Math.min(Math.abs(caret - start), Math.abs(caret - end));
+    if (!best || d < best.d) best = { start, end, d };
+  }
+  return best ? { start: best.start, end: best.end } : null;
+}
+
+function bindChipWeight(node, ui, seg) {
+  if (!seg || seg.kind !== 'tag' || !seg.plain) return;
+  let timer = null;
+  let sx = 0;
+  let sy = 0;
+  node.addEventListener('pointerdown', (e) => {
+    if (weightDrag) return;
+    sx = e.clientX;
+    sy = e.clientY;
+    try {
+      node.setPointerCapture(e.pointerId);
+    } catch {}
+    timer = setTimeout(() => {
+      timer = null;
+      beginWeight(ui, seg.start, seg.end, e.clientX, e.clientY);
+    }, 260);
+  });
+  node.addEventListener('pointermove', (e) => {
+    if (timer && Math.hypot(e.clientX - sx, e.clientY - sy) > 8) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  });
+  const clear = () => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  };
+  node.addEventListener('pointerup', clear);
+  node.addEventListener('pointercancel', clear);
+  node.addEventListener('contextmenu', (e) => e.preventDefault());
+}
+
+function beginWeight(ui, start, end, x, y) {
+  const ta = ui.els.prompt;
+  const raw = ta.value.slice(start, end);
+  if (!raw || /^text\s*:/i.test(raw.trim()) || raw.includes('|')) return;
+  const plain = stripWeightSyntax(raw);
+  if (!plain || plain.length > 80) return;
+  const weight = parseSegmentWeight(raw);
+  weightDrag = {
+    ui,
+    base: ta.value,
+    start,
+    end,
+    plain,
+    weight,
+    weight0: weight,
+    startY: y,
+    changed: false,
+  };
+  ensureHud();
+  updateHud(x, y);
+  document.body.classList.add('weight-mode');
+}
+
+function ensureHud() {
+  if (weightHud) return;
+  weightHud = el('div', { class: 'weight-hud' });
+  document.body.append(weightHud);
+}
+
+function updateHud(x, y) {
+  if (!weightHud || !weightDrag) return;
+  weightHud.innerHTML = '';
+  weightHud.append(
+    el('div', { class: 'wh-tag' }, weightDrag.plain.slice(0, 42)),
+    el('div', { class: 'wh-weight' }, weightDrag.weight.toFixed(1) + '×'),
+    el('div', { class: 'wh-hint' }, '上下滑动 · 松手应用'),
+  );
+  weightHud.style.left = clamp(x, 90, window.innerWidth - 90) + 'px';
+  weightHud.style.top = Math.max(80, y - 76) + 'px';
+  weightHud.classList.add('show');
+}
+
+function onWeightMove(e) {
+  if (longPress && Math.hypot(e.clientX - longPress.x, e.clientY - longPress.y) > 10) {
+    clearTimeout(longPress.timer);
+    longPress = null;
+  }
+  if (!weightDrag) return;
+  if (e.cancelable) e.preventDefault();
+  const dy = weightDrag.startY - e.clientY;
+  let w = weightDrag.weight0 + (dy / 55) * 0.1;
+  w = Math.round(clamp(w, 0.1, 3) * 10) / 10;
+  if (w !== weightDrag.weight) {
+    weightDrag.weight = w;
+    weightDrag.changed = true;
+    const ta = weightDrag.ui.els.prompt;
+    const text =
+      weightDrag.base.slice(0, weightDrag.start) +
+      `${w.toFixed(1)}::${weightDrag.plain}::` +
+      weightDrag.base.slice(weightDrag.end);
+    ta.value = text;
+    state.prompt = text;
+  }
+  updateHud(e.clientX, e.clientY);
+}
+
+function onWeightEnd() {
+  if (longPress) {
+    clearTimeout(longPress.timer);
+    longPress = null;
+  }
+  if (!weightDrag) return;
+  const d = weightDrag;
+  weightDrag = null;
+  document.body.classList.remove('weight-mode');
+  if (weightHud) weightHud.classList.remove('show');
+  if (!d.changed) return;
+  const ta = d.ui.els.prompt;
+  const pos = d.start + `${d.weight.toFixed(1)}::${d.plain}::`.length;
+  try {
+    ta.setSelectionRange(pos, pos);
+  } catch {}
+  save();
+  updatePromptUI(d.ui);
+  toast(`${d.plain.slice(0, 18)} → ${d.weight.toFixed(1)}`, 'ok', 1200);
 }
 
 function syncHighlightScroll() {
