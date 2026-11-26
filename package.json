@@ -1,0 +1,11 @@
+{
+  "name": "novelai-studio",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "NovelAI image generation studio — static, mobile-first, extensible",
+  "scripts": {
+    "serve": "python -m http.server 8137",
+    "check": "node dev/check.mjs"
+  }
+}

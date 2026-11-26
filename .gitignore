@@ -1,0 +1,10 @@
+# dev tooling / local secrets
+dev/.proxy/
+dev/probe/
+dev/appjs/
+dev/x/
+dev/recovered_generate.js
+node_modules/
+.DS_Store
+Thumbs.db
+*.log
