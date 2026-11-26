@@ -230,6 +230,7 @@ function styleDimCard() {
 
 function createJob() {
   const v = dimensionValues();
+  if (!state.batch.styleIds.length) v.styles = [state.activeStyleId];
   const total = v.characters.length * v.outfits.length * v.actions.length * v.styles.length;
   if (total > MAX_TASKS) {
     toast(`组合数 ${total} 超过上限 ${MAX_TASKS}，请减少维度项`, 'error', 4000);
