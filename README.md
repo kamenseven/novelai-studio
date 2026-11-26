@@ -65,10 +65,16 @@
 ## 快速开始
 
 1. 打开部署好的站点（或本地 `python -m http.server 8137` 后访问 `http://127.0.0.1:8137/`）。
-2. Token 默认读取仓库根目录的 **`env`** 文件（`NOVEL_AI_TOKEN=...`）；打开设置也可以填入自己的 Token 覆盖。请求直接发往 `https://image.novelai.net`（官方接口已开启 CORS，无需自建代理）。
-3. 保存/使用后会读取账号信息，回到「生成」开始。
+2. 输入登录密码。Token 以 AES-GCM 加密形式存放在仓库根目录的 **`env`** 里，只有密码正确才会在浏览器内解密；登录后可勾选「记住登录状态 30 天」，用 Cookie 保持登录。
+3. 登录后自动读取账号信息，回到「生成」开始。
 
-> `env` 会随 GitHub Pages 公开，任何访问者都能读到里面的 Token。请使用专用、可随时轮换的 NovelAI Token，**不要**把 GitHub Token、VPN 订阅或其他密钥放进工程 `env`。
+> `env` 是公开的，但里面只有加密后的 Token 和密码哈希，没有明文 Token。密码本身不在仓库里；修改密码：
+>
+> ```bash
+> node dev/set_password.mjs "new-password"
+> ```
+>
+> 该脚本会读取工作区 `env` 里的 `NOVEL_AI_TOKEN`，重新加密并写入工程的 `env`。
 
 > 在中国大陆访问 `image.novelai.net` 需要代理/VPN；浏览器网络需能直连该域名。
 
@@ -135,6 +141,8 @@ dev/                     开发/测试脚本（不参与部署也可保留）
 - 从图片导入时，Vibe 能恢复编码与强度，但无法恢复原始参考图画廊；精准参考（Precise Reference）的参考图不会嵌在 PNG 里，只恢复 prompt/参数。
 - 生成大图/批量时手机可能因内存限制变慢，建议一次 1–2 张。
 - 前端直接持有 Token 是静态站点的固有限制；本仓库的 `env` 默认 Token 会公开可见，请勿在公共电脑使用，勿把 GitHub PAT 或其他密钥提交到仓库。建议定期轮换 NovelAI Token。
+- 密码登录是**客户端门禁 + Token 加密**，不是服务端鉴权：拥有 `env` 的人可以离线暴力尝试密码；强密码能显著提高门槛，但要真正防止滥用，需部署一层服务端代理/Worker 持有 Token。
+- 早期版本曾把明文 Token 提交到 git 历史；升级后请到 NovelAI 账号轮换 Token，再执行 `node dev/set_password.mjs "新密码"` 重新加密。
 
 ## 扩展
 

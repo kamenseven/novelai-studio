@@ -7,7 +7,7 @@ let loading = null;
 export function loadEnv() {
   if (cached) return Promise.resolve(cached);
   if (loading) return loading;
-  loading = fetch('./env', { cache: 'no-store' })
+  loading = fetch('./env?t=' + Date.now(), { cache: 'no-store' })
     .then((r) => (r.ok ? r.text() : ''))
     .then((text) => {
       const out = {};

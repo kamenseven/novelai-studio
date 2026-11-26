@@ -5,6 +5,7 @@ import { $, el, svg, setLang } from './util.js';
 import { toast } from './ui.js';
 import { loadPlugins } from './plugins.js';
 import { getUserData } from './api.js';
+import { authGate, renderLogin } from './auth.js';
 import * as generate from './views/generate.js';
 import * as gallery from './views/gallery.js';
 import * as batch from './views/batch.js';
@@ -22,6 +23,12 @@ const routes = {
 let current = 'generate';
 
 export async function boot() {
+  const gate = await authGate();
+  if (!gate.ok) {
+    renderLogin(gate.env, () => location.reload());
+    return;
+  }
+  if (gate.token) state.token = gate.token;
   await init();
   document.documentElement.dataset.theme = state.theme || 'dark';
   setLang(state.lang || 'zh');

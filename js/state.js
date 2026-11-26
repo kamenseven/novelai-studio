@@ -4,6 +4,7 @@ import { DEFAULT_STATE, MODEL_MAP } from './config.js';
 import { loadJSON, saveJSON, idb, uuid, setLang } from './util.js';
 import { setToken, setBase } from './api.js';
 import { loadEnv } from './env.js';
+import { getStoredAuthToken } from './auth.js';
 
 const KEY = 'nai-studio:state:v1';
 
@@ -64,6 +65,9 @@ export async function init() {
   setLang(state.lang);
   const env = await loadEnv();
   state.envToken = env.NOVEL_AI_TOKEN || '';
+  state.authConfigured = !!(env.APP_PASSWORD_SHA256 || env.APP_PASSWORD || env.NOVEL_AI_TOKEN_ENC);
+  const authToken = getStoredAuthToken();
+  if (authToken) state.token = authToken;
   if (!state.token && state.envToken) {
     state.token = state.envToken;
     state.tokenFromEnv = true;

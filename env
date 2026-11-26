@@ -1,3 +1,7 @@
-# Default NovelAI token for this static app.
-# WARNING: GitHub Pages is public; anyone can read this file.
-NOVEL_AI_TOKEN=pst-X19_Wyj_JY-hKZne80b1Va7We7MhOV661gnQGgoHSDxC3h5-PmIZIddGwrd4umv7
+# NovelAI Studio — password-gated static build.
+# The token is AES-GCM encrypted with a PBKDF2 key derived from the login password.
+# Do not commit the plaintext token. Change the password with:
+#   node dev/set_password.mjs "new-password"
+APP_PASSWORD_SHA256=b8e2eeeb60ce81642da9f26e35825d567b09a13a1145304e28172af1713cbf3c
+ENC_SALT=/HX3+YD4pOjYgJP3zLiRJQ==
+NOVEL_AI_TOKEN_ENC=d7j+nOeg06p1meoi/6hYn/1ElXV1oTZgw7YxrcovaEHWI196hCw2Bd9GClCoxh3lxTiaQLxjNV5QRw2e4bYCIuK86QgJmblcZHifZjeD7Sp/u0E7XngtSjCdOPASI2Lz

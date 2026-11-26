@@ -974,6 +974,44 @@ textarea.input { resize: vertical; line-height: 1.55; }
 .batch-thumb { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; padding: 0; background: var(--input-bg); aspect-ratio: 3 / 4; cursor: pointer; }
 .batch-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
+/* ---------------------------------------------------------------- login */
+
+.login-screen {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(600px 400px at 50% 0%, var(--accent-soft), transparent 70%),
+    var(--bg);
+}
+.login-card {
+  width: min(100%, 360px);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 26px 22px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.login-logo {
+  width: 52px; height: 52px; margin: 0 auto 2px;
+  border-radius: 16px; display: grid; place-items: center;
+  background: linear-gradient(135deg, var(--accent), #c084fc);
+  color: #fff;
+}
+.login-logo .icon { width: 26px; height: 26px; }
+.login-title { font-size: 18px; font-weight: 700; text-align: center; }
+.login-sub { font-size: 12px; color: var(--muted); text-align: center; line-height: 1.55; margin-bottom: 4px; }
+.login-row { display: flex; gap: 6px; }
+.login-input { flex: 1; font-size: 16px; padding: 11px 12px; }
+.login-remember { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-2); }
+.login-remember input { accent-color: var(--accent); }
+.login-btn { height: 42px; }
+.login-error { min-height: 16px; color: var(--danger); font-size: 12px; text-align: center; }
+
 /* ---------------------------------------------------------------- tools */
 
 .tools-view { max-width: 1080px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }

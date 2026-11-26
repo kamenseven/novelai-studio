@@ -5,6 +5,7 @@ import { getUserData, setToken as apiSetToken } from '../api.js';
 import { $, el, svg, formatDate, downloadBlob, loadJSON, saveJSON, t, getLang, setLang } from '../util.js';
 import { toast, modal, confirmDialog, iconBtn, switchRow, slider, select, emptyState } from '../ui.js';
 import { registry, pluginCount } from '../plugins.js';
+import { logout, storeAuthToken } from '../auth.js';
 import { MODELS, MODEL_MAP } from '../config.js';
 
 let accountBusy = false;
@@ -38,7 +39,8 @@ export function mount(container) {
     const actions = el('div', { class: 'row-line gap' },
       el('button', { class: 'btn btn-primary btn-sm', onclick: saveToken }, '保存 Token'),
       el('button', { class: 'btn btn-sm', onclick: testAccount }, '测试连接'),
-      state.envToken ? el('button', { class: 'btn btn-sm', onclick: useEnvToken }, '改用 env 默认') : null);
+      state.envToken ? el('button', { class: 'btn btn-sm', onclick: useEnvToken }, '改用 env 默认') : null,
+      state.authConfigured ? el('button', { class: 'btn btn-sm btn-danger', onclick: logout }, '退出登录') : null);
     const tokenCard = card('NovelAI Token',
       el('p', { class: 'hint' }, '默认读取工程根目录 env 里的 NOVEL_AI_TOKEN；也可以在这里填入自己的 Token 覆盖。请求直接发往 image.novelai.net。'),
       state.tokenFromEnv ? el('p', { class: 'hint warn-text' }, '注意：env 会随 GitHub Pages 一起公开，任何访问站点的人都能读到这个 Token。请使用专用/可轮换的 Token，不要在 env 里放 GitHub Token 或其他密钥。') : null,
@@ -137,6 +139,7 @@ export function mount(container) {
         state.tokenFromEnv = true;
       }
       apiSetToken(state.token);
+      if (state.authConfigured) storeAuthToken(state.token, true);
       save();
       toast(state.tokenFromEnv ? '已改回 env 默认 Token' : 'Token 已保存', 'ok');
       testAccount();
