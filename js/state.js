@@ -3,6 +3,7 @@
 import { DEFAULT_STATE, MODEL_MAP } from './config.js';
 import { loadJSON, saveJSON, idb, uuid, setLang } from './util.js';
 import { setToken, setBase } from './api.js';
+import { loadEnv } from './env.js';
 
 const KEY = 'nai-studio:state:v1';
 
@@ -38,6 +39,8 @@ function doSave() {
     delete r.b64;
   }
   if (clean.baseImage) delete clean.baseImage.dataURL;
+  delete clean.envToken;
+  if (clean.tokenFromEnv) delete clean.token;
   if (!saveJSON(KEY, clean)) {
     // Most likely quota — drop the least important data and retry once.
     clean.presets = (clean.presets || []).slice(-10);
@@ -59,6 +62,12 @@ export async function init() {
     if (saved.refs) state.refs = saved.refs;
   }
   setLang(state.lang);
+  const env = await loadEnv();
+  state.envToken = env.NOVEL_AI_TOKEN || '';
+  if (!state.token && state.envToken) {
+    state.token = state.envToken;
+    state.tokenFromEnv = true;
+  }
   setToken(state.token);
   setBase(state.base);
   if (state.model === 'nai-diffusion-5-full' && state.effort === 'medium') {

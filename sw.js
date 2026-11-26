@@ -1,6 +1,6 @@
-﻿// Minimal offline shell cache. API calls always go to the network.
+// Minimal offline shell cache. API calls always go to the network.
 
-const VERSION = 'nai-studio-v10';
+const VERSION = 'nai-studio-v11';
 const SHELL = [
   './',
   './index.html',
@@ -8,6 +8,7 @@ const SHELL = [
   './css/app.css',
   './js/app.js',
   './js/config.js',
+  './js/env.js',
   './js/util.js',
   './js/api.js',
   './js/payload.js',
@@ -48,6 +49,7 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return; // NovelAI API & CDNs: network only
   if (url.pathname.endsWith('/sw.js')) return;
+  if (url.pathname.endsWith('/env')) return; // token file must always be fresh
 
   e.respondWith(
     caches.match(req, { ignoreSearch: true }).then((hit) => {

@@ -34,11 +34,14 @@ export function mount(container) {
     }, '显示/隐藏');
     const row = el('div', { class: 'token-row' }, tokenInput, showBtn);
     const status = el('div', { class: 'token-status' });
+    if (state.tokenFromEnv) status.textContent = '当前使用工程 env 中的默认 Token';
     const actions = el('div', { class: 'row-line gap' },
       el('button', { class: 'btn btn-primary btn-sm', onclick: saveToken }, '保存 Token'),
-      el('button', { class: 'btn btn-sm', onclick: testAccount }, '测试连接'));
+      el('button', { class: 'btn btn-sm', onclick: testAccount }, '测试连接'),
+      state.envToken ? el('button', { class: 'btn btn-sm', onclick: useEnvToken }, '改用 env 默认') : null);
     const tokenCard = card('NovelAI Token',
-      el('p', { class: 'hint' }, '从 NovelAI 账号设置中创建 Persistent API Token（以 pst- 开头）。Token 只保存在本机浏览器，请求直接发往 image.novelai.net。'),
+      el('p', { class: 'hint' }, '默认读取工程根目录 env 里的 NOVEL_AI_TOKEN；也可以在这里填入自己的 Token 覆盖。请求直接发往 image.novelai.net。'),
+      state.tokenFromEnv ? el('p', { class: 'hint warn-text' }, '注意：env 会随 GitHub Pages 一起公开，任何访问站点的人都能读到这个 Token。请使用专用/可轮换的 Token，不要在 env 里放 GitHub Token 或其他密钥。') : null,
       row, actions, status);
 
     /* account */
@@ -128,9 +131,25 @@ export function mount(container) {
 
     function saveToken() {
       state.token = tokenInput.value.trim();
+      state.tokenFromEnv = false;
+      if (!state.token && state.envToken) {
+        state.token = state.envToken;
+        state.tokenFromEnv = true;
+      }
       apiSetToken(state.token);
       save();
-      toast('Token 已保存', 'ok');
+      toast(state.tokenFromEnv ? '已改回 env 默认 Token' : 'Token 已保存', 'ok');
+      testAccount();
+    }
+
+    function useEnvToken() {
+      if (!state.envToken) return;
+      state.token = state.envToken;
+      state.tokenFromEnv = true;
+      tokenInput.value = state.token;
+      apiSetToken(state.token);
+      save();
+      toast('已改用 env 默认 Token', 'ok');
       testAccount();
     }
 
