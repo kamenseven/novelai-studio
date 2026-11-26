@@ -28,7 +28,7 @@ import {
 } from '../ui.js';
 import {
   downloadResult, reuseSettings, sendToImg2Img, sendToInpaint, upscaleResult, runEnhanceDialog,
-  directorResult, toggleFavorite,
+  directorResult, toggleFavorite, importMetaFromFile,
 } from '../actions.js';
 
 const MAX_VIBES = 16;
@@ -88,6 +88,8 @@ export function mount(container) {
     stageActions: $('#stageActions', container),
     controls: $('#controls', container),
     tokenWarn: $('#tokenWarn', container),
+    importMetaBtn: $('#importMetaBtn', container),
+    promptCard: $('.prompt-card', container),
     promptAssist: $('#promptAssist', container),
     paZh: $('#paZh', container),
     paIssues: $('#paIssues', container),
@@ -106,6 +108,9 @@ export function mount(container) {
       renderStage(ui);
       renderStrip(ui);
       renderHeaderActions(ui);
+    }
+    if (type === 'applyMeta') {
+      renderAll(ui);
     }
   });
   bind(ui);
@@ -152,7 +157,10 @@ function template() {
       <div class="card prompt-card">
         <div class="card-head">
           <span class="card-title">提示词</span>
-          <span class="counter" id="tokenCount">0</span>
+          <div class="card-head-right">
+            <button class="icon-btn" id="importMetaBtn" title="从图片导入元数据">${svg('upload')}</button>
+            <span class="counter" id="tokenCount">0</span>
+          </div>
         </div>
         <div class="prompt-wrap">
           <div class="prompt-hl" id="promptHL"></div>
@@ -297,6 +305,8 @@ function bind(ui) {
   const { els } = ui;
 
   els.modelBtn.addEventListener('click', () => openModelSheet(ui));
+  els.importMetaBtn.addEventListener('click', () => pickMetaFile(ui));
+  setupMetaDrop(ui);
   els.styleBtn.addEventListener('click', () => openStyleSheet(ui));
   els.tagBtn.addEventListener('click', () => openTagBrowser(ui));
   els.formatBtn.addEventListener('click', async () => {
@@ -443,6 +453,44 @@ function bind(ui) {
 }
 
 /* ------------------------------------------------------------------- render */
+
+function pickMetaFile(ui) {
+  const input = el('input', { type: 'file', accept: 'image/png,.png' });
+  input.addEventListener('change', async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      await importMetaFromFile(file);
+    } catch (e) {
+      toast(e.message || String(e), 'error', 4500);
+    }
+  });
+  input.click();
+}
+
+function setupMetaDrop(ui) {
+  const card = ui.els.promptCard;
+  if (!card) return;
+  card.addEventListener('dragover', (e) => {
+    if (e.dataTransfer?.types?.includes('Files')) {
+      e.preventDefault();
+      card.classList.add('dragover');
+    }
+  });
+  card.addEventListener('dragleave', () => card.classList.remove('dragover'));
+  card.addEventListener('drop', async (e) => {
+    if (!e.dataTransfer?.files?.length) return;
+    e.preventDefault();
+    card.classList.remove('dragover');
+    const file = [...e.dataTransfer.files].find((f) => /png/i.test(f.type) || /\.png$/i.test(f.name));
+    if (!file) return toast('请拖入 PNG 图片', 'error');
+    try {
+      await importMetaFromFile(file);
+    } catch (err) {
+      toast(err.message || String(err), 'error', 4500);
+    }
+  });
+}
 
 function renderAll(ui) {
   renderHeader(ui);
@@ -832,10 +880,9 @@ function renderHeaderActions(ui) {
       toast(`种子 ${seed} 已复制`, 'ok');
     }
   });
-  add('sliders', '载入设置', () => {
-    reuseSettings(r);
+  add('sliders', '载入设置', async () => {
+    await reuseSettings(r);
     renderAll(ui);
-    toast('已载入生成设置', 'ok');
   });
   add('image', '作为图生图', async () => {
     await sendToImg2Img(r);

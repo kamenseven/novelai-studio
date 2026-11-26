@@ -1,13 +1,15 @@
 // Gallery / history view backed by IndexedDB.
 
-import { galleryAll, galleryDelete, gallerySetFav, galleryClear } from '../state.js';
+import { galleryAll, galleryDelete, gallerySetFav, galleryClear, saveToGallery } from '../state.js';
 import { $, el, svg, escapeHTML, formatDate, formatBytes, downloadBlob, t } from '../util.js';
 import { toast, modal, confirmDialog, iconBtn, openViewer, emptyState, spinner } from '../ui.js';
 import { registry } from '../plugins.js';
 import {
   downloadResult, reuseSettings, sendToImg2Img, sendToInpaint, upscaleResult, runEnhanceDialog,
-  directorResult, toggleFavorite, resultFilename,
+  directorResult, toggleFavorite, resultFilename, guessModel,
 } from '../actions.js';
+import { readImageMeta } from '../api.js';
+import { uuid, formatBytes as fmtBytes } from '../util.js';
 import { capsFor } from '../config.js';
 import { state } from '../state.js';
 
@@ -27,6 +29,7 @@ export async function mount(container, { navigate } = {}) {
           <button class="chip active" data-fav="0">全部</button>
           <button class="chip" data-fav="1">★ 收藏</button>
         </div>
+        <button class="btn btn-sm" id="galleryImport">导入</button>
         <button class="btn btn-sm" id="galleryClear">清空</button>
       </div>
       <div class="gallery-grid" id="galleryGrid"></div>
@@ -43,6 +46,27 @@ export async function mount(container, { navigate } = {}) {
       render();
     }),
   );
+  $('#galleryImport', container).addEventListener('click', () => {
+    const input = el('input', { type: 'file', accept: 'image/*', multiple: true });
+    input.addEventListener('change', async () => {
+      const files = [...(input.files || [])];
+      if (!files.length) return;
+      let added = 0;
+      for (const file of files) {
+        const parsed = await readImageMeta(file).catch(() => null);
+        await saveToGallery(
+          { id: uuid(), blob: file, meta: parsed, created: Date.now() },
+          { mode: 'import', model: parsed?.model || guessModel(parsed?.raw) || '' },
+        );
+        added++;
+      }
+      items = await galleryAll();
+      render();
+      toast(`已导入 ${added} 张图片${files.some((f) => !/png/i.test(f.type)) ? '（非 PNG 可能没有元数据）' : ''}`, 'ok');
+    });
+    input.click();
+  });
+
   $('#galleryClear', container).addEventListener('click', async () => {
     if (await confirmDialog('清空图库', '将删除本机保存的全部图片，无法恢复。确定吗？', { danger: true })) {
       await galleryClear();
@@ -159,8 +183,8 @@ function openDetail(rec, navigate) {
     actions.append(b);
   };
   act('download', '下载', () => downloadResult(rec));
-  act('sliders', '载入设置', () => {
-    reuseSettings(rec);
+  act('sliders', '载入设置', async () => {
+    await reuseSettings(rec);
     closeAll();
     navigate?.('#/generate');
   });

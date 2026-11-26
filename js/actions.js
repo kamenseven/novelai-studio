@@ -1,9 +1,10 @@
 // Shared image actions used by Generate / Gallery / Tools.
 
-import { state, addResult, saveToGallery, gallerySetFav, saveBaseImage } from './state.js';
-import { upscaleImage, directorTool, generateImage, ApiError } from './api.js';
+import { state, addResult, saveToGallery, gallerySetFav, saveBaseImage, addVibe, emit, save } from './state.js';
+import { upscaleImage, directorTool, generateImage, ApiError, readImageMeta } from './api.js';
 import { buildRequest, effectiveModel } from './payload.js';
-import { downloadBlob, sanitizeFilename, t, blobToDataURL } from './util.js';
+import { capsFor, MODEL_MAP } from './config.js';
+import { downloadBlob, sanitizeFilename, t, blobToDataURL, uuid } from './util.js';
 import { toast, modal as openModal, confirmDialog, openViewer } from './ui.js';
 import { plainPrompt } from './prompt.js';
 
@@ -42,24 +43,36 @@ export function metaToSettings(meta) {
   if (meta.sm_dyn) out.smDyn = true;
   if (meta.dynamic_thresholding) out.dyn = true;
   if (meta.straight_alpha) out.transparent = true;
+  if (meta.normalize_reference_strength_multiple != null) {
+    out.normalizeVibes = meta.normalize_reference_strength_multiple !== false;
+  }
+  // The stored prompt/uc already contain the quality/UC preset text: don't append again.
+  out.quality = 'none';
+  out.uc = 'none';
+  out.activeStyleId = null;
   const model = guessModel(meta);
   if (model) out.model = model;
   const chars = m?.char_captions;
   if (Array.isArray(chars) && chars.length) {
-    out.characters = chars.map((c) => ({
+    const charUc = meta.v4_negative_prompt?.caption?.char_captions || [];
+    out.characters = chars.map((c, i) => ({
       prompt: c.char_caption || '',
-      uc: '',
+      uc: charUc[i]?.char_caption || '',
       x: c.centers?.[0]?.x ?? 0.5,
       y: c.centers?.[0]?.y ?? 0.5,
       enabled: true,
     }));
     out.charPosMode = chars.some((c) => (c.centers || []).length) ? 'custom' : 'ai';
+  } else {
+    out.characters = [];
+    out.charPosMode = 'ai';
   }
   return out;
 }
 
 export function guessModel(meta) {
   const name = (meta?.model_name || '').toLowerCase();
+  if (name.includes('medium')) return 'nai-diffusion-5-full-medium';
   if (name.includes('v5')) return 'nai-diffusion-5-full';
   if (name.includes('v4.5')) return 'nai-diffusion-4-5-full';
   if (name.includes('v4')) return 'nai-diffusion-4-full';
@@ -68,19 +81,92 @@ export function guessModel(meta) {
   return null;
 }
 
-export function reuseSettings(rec) {
-  const meta = rec.meta || {};
+export async function applyImageMeta(meta) {
   const patch = metaToSettings(meta);
   Object.assign(state, patch);
   state.activeStyleId = null;
-  if (meta.width && meta.height) {
+  state.mode = 't2i';
+  state.baseImage = null;
+  state.refs = [];
+  if (patch.width && patch.height) {
     state.aspect = 'custom';
     state.size = 'custom';
+  } else {
+    state.aspect = 'portrait';
+    state.size = 'normal';
+    state.width = 832;
+    state.height = 1216;
   }
-  if (rec.prompt && !patch.prompt) state.prompt = rec.prompt;
-  if (rec.seed != null && !patch.seed) state.seed = String(rec.seed);
-  toast('已载入设置', 'ok');
+  state.vibes = [];
+  const caps = capsFor(effectiveModel(state));
+  const refs = Array.isArray(meta.reference_image_multiple) ? meta.reference_image_multiple : [];
+  if (caps.vibe && refs.length) {
+    for (let i = 0; i < refs.length; i++) {
+      const b64 = refs[i];
+      if (!b64) continue;
+      const info = Number(meta.reference_information_extracted_multiple?.[i] ?? 1);
+      const strength = Number(meta.reference_strength_multiple?.[i] ?? 0.6);
+      await addVibe({
+        id: uuid(),
+        name: `图片 Vibe ${i + 1}`,
+        preview: null,
+        info,
+        strength,
+        encodedB64: caps.encodedVibe ? b64 : null,
+        imageB64: caps.encodedVibe ? null : b64,
+        encodedInfo: info,
+        model: state.model,
+        imported: true,
+      });
+    }
+  }
+  save();
+  emit('applyMeta');
   return patch;
+}
+
+export async function importMetaFromFile(file) {
+  if (!file) return false;
+  if (!/image\/png/i.test(file.type) && !/\.png$/i.test(file.name || '')) {
+    throw new Error('目前只支持 PNG（NovelAI 元数据保存在 PNG 文本块里）');
+  }
+  const parsed = await readImageMeta(file);
+  if (!parsed?.raw) throw new Error('这张图片没有 NovelAI 生成信息（找不到 Comment 元数据）');
+  const raw = parsed.raw;
+  const model = MODEL_MAP[guessModel(raw) || '']?.label || raw.model_name || '未知模型';
+  const lines = [
+    `模型：${model}`,
+    `尺寸：${raw.width || '?'} × ${raw.height || '?'} · ${raw.steps || '?'} 步 · CFG ${raw.scale ?? '?'}`,
+    `种子：${raw.seed ?? '?'}${raw.n_samples > 1 ? ` · ${raw.n_samples} 张` : ''}`,
+    `角色提示词：${raw.v4_prompt?.caption?.char_captions?.length || 0} 个`,
+    `Vibe：${raw.reference_image_multiple?.length || 0} 个`,
+    `提示词：${String(raw.prompt || '').slice(0, 70)}${String(raw.prompt || '').length > 70 ? '…' : ''}`,
+  ];
+  const ok = await confirmDialog('从图片导入元数据', lines.join('\n'), { okLabel: '载入' });
+  if (!ok) return false;
+  await applyImageMeta(raw);
+  toast('已从图片载入提示词与参数', 'ok');
+  return true;
+}
+
+export async function reuseSettings(rec) {
+  let meta = rec?.meta?.raw || null;
+  if (!meta && rec?.blob) {
+    const parsed = await readImageMeta(rec.blob).catch(() => null);
+    meta = parsed?.raw || null;
+  }
+  if (meta) {
+    await applyImageMeta(meta);
+    toast('已载入生成设置', 'ok');
+    return true;
+  }
+  if (rec?.prompt) state.prompt = rec.prompt;
+  if (rec?.seed != null) state.seed = String(rec.seed);
+  state.activeStyleId = null;
+  save();
+  emit('applyMeta');
+  toast('已载入设置', 'ok');
+  return false;
 }
 
 export async function sendToImg2Img(rec) {
