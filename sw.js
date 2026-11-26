@@ -1,6 +1,6 @@
 ﻿// Minimal offline shell cache. API calls always go to the network.
 
-const VERSION = 'nai-studio-v6';
+const VERSION = 'nai-studio-v8';
 const SHELL = [
   './',
   './index.html',
@@ -12,6 +12,7 @@ const SHELL = [
   './js/api.js',
   './js/payload.js',
   './js/prompt.js',
+  './js/promptassist.js',
   './js/state.js',
   './js/ui.js',
   './js/actions.js',

@@ -418,6 +418,7 @@ export const DEFAULT_STATE = {
   lang: 'zh',
   autosave: true,
   highlight: true,
+  showPromptAssist: true,
   showTips: true,
   savePrompts: true,
   presets: [],

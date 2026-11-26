@@ -20,7 +20,8 @@
 
 - 提示词：质量标签（标准/轻量/关闭）、Undesired Content 预设（Heavy/Light/Human/Furry/None）、负面提示词
 - NovelAI 提示词语法高亮：`{加强}`、`[减弱]`、`1.5::数值强调::`、`||随机选项||`、`Text:` 文字块
-- 实时 Tag 补全：内置 2 万条 Danbooru 标签（分类 + 热度，本地秒出）+ 官方 `suggest-tags` 长尾合并；可打开 Tag 词典浏览/筛选
+- 实时 Tag 补全：内置 2 万条 Danbooru 标签（分类 + 热度 + 中文，本地秒出）+ 官方 `suggest-tags` 长尾合并；支持中文反查英文标签；可打开 Tag 词典浏览/筛选
+- 提示词助手：英文标签下显示中文小字（不改变输入），并检查中文标点、下划线、括号/数值强调未闭合、重复标签、疑似拼写错误，可单条或一键修正；可在设置中关闭
 - 风格模板：前缀 / 后缀 / 风格负面，可限定适用模型系列（V5/V4.5/V4/V3/Furry），可覆盖步数与 CFG，支持导入导出
 - 批量矩阵：角色 × 服装 × 动作 × 风格自由组合、任务队列逐张生成、暂停/继续（刷新后续跑）、批次结果聚合
 - 提示词片段 `@名称`
@@ -99,7 +100,8 @@ js/
   payload.js             根据 UI 状态构造官方请求体（params_version 4）
   prompt.js              提示词高亮、随机器、token 估算、Tag 补全定位
   styles.js              风格模板（前缀/后缀/负面/模型限定/参数覆盖）
-  tags.js                本地 Danbooru 标签检索
+  tags.js                本地 Danbooru 标签检索（中英）
+  promptassist.js        提示词中文注解 + 轻量纠错
   state.js               状态、持久化、图库/资源 IndexedDB、预设
   actions.js             共享图片操作（下载/载入/放大/增强/导演/收藏）
   ui.js                  通用组件（modal/toast/slider/segmented/viewer）

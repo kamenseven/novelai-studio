@@ -18,6 +18,7 @@ import {
   STYLE_FAMILIES, styleApplies, getActiveStyle, newStyle, sampleStyles,
 } from '../styles.js';
 import { loadTags, searchTags, formatTagCount, TAG_CATEGORIES } from '../tags.js';
+import { analyzePrompt, applyAllFixes } from '../promptassist.js';
 import {
   $, $$, el, svg, escapeHTML, clamp, debounce, uuid, randomSeed, dataURLToBlob,
   blobToDataURL, loadImage, canvasToBlob, fitReferenceCanvas, downloadBlob, sanitizeFilename, t, idb,
@@ -86,6 +87,9 @@ export function mount(container) {
     stageActions: $('#stageActions', container),
     controls: $('#controls', container),
     tokenWarn: $('#tokenWarn', container),
+    promptAssist: $('#promptAssist', container),
+    paZh: $('#paZh', container),
+    paIssues: $('#paIssues', container),
     qualityRow: $('#qualityRow', container),
     negativeCount: $('#negativeCount', container),
     samplerRow: $('#samplerRow', container),
@@ -156,6 +160,10 @@ function template() {
         </div>
         <div class="token-track"><div class="token-fill" id="tokenBar"></div></div>
         <div class="token-warn" id="tokenWarn" hidden>提示词过长，超出部分可能被截断</div>
+        <div class="prompt-assist" id="promptAssist" hidden>
+          <div class="pa-zh" id="paZh"></div>
+          <div class="pa-issues" id="paIssues"></div>
+        </div>
 
         <div class="prompt-bar">
           <label class="mini-field">质量
@@ -738,6 +746,7 @@ function openTagBrowser(ui) {
       const row = el('button', { class: 'tag-browser-row' },
         el('span', { class: 'tag-dot', style: { background: cat.color } }),
         el('span', { class: 'tag-browser-name' }, item.label),
+        item.zh ? el('span', { class: 'tag-browser-zh' }, item.zh) : null,
         el('span', { class: 'tag-browser-cat' }, cat.label),
         el('span', { class: 'tag-browser-count' }, formatTagCount(item.count)));
       row.addEventListener('click', () => {
@@ -877,6 +886,109 @@ function updatePromptUI(ui) {
   syncHighlightScroll();
   els.negativeCount.textContent = estimateTokens(state.negative);
   els.negToggle.classList.toggle('open', !els.negWrap.hidden);
+  schedulePromptAssist(ui);
+}
+
+let assistTimer;
+function schedulePromptAssist(ui) {
+  clearTimeout(assistTimer);
+  assistTimer = setTimeout(() => renderPromptAssist(ui), 180);
+}
+
+async function renderPromptAssist(ui) {
+  const { els } = ui;
+  if (!els.promptAssist) return;
+  if (state.showPromptAssist === false || !state.prompt.trim()) {
+    els.promptAssist.hidden = true;
+    return;
+  }
+  if (document.activeElement !== els.prompt && !state.prompt.trim()) return;
+  try {
+    await loadTags();
+  } catch {}
+  if (!els.promptAssist.isConnected) return;
+  const family = MODEL_MAP[effectiveModel(state)]?.family || 'v5';
+  const result = analyzePrompt(state.prompt, { modelFamily: family });
+  if (!result.segments.length) {
+    els.promptAssist.hidden = true;
+    return;
+  }
+  els.promptAssist.hidden = false;
+
+  // Chinese annotations
+  els.paZh.innerHTML = '';
+  const items = [];
+  for (const seg of result.segments) {
+    if (seg.kind === 'text') {
+      if (seg.text) items.push(el('span', { class: 'pa-item' },
+        el('span', { class: 'pa-tag' }, 'Text:'),
+        el('span', { class: 'pa-cn' }, seg.text.slice(0, 60))));
+      continue;
+    }
+    if (seg.kind === 'random' || seg.kind === 'multi') {
+      const parts = (seg.parts || []).map((p) => (p.info?.zh ? `${p.plain} ${p.info.zh}` : p.plain)).filter(Boolean);
+      if (parts.length) items.push(el('span', { class: 'pa-item' },
+        el('span', { class: 'pa-tag' }, seg.kind === 'random' ? '随机' : '分格'),
+        el('span', { class: 'pa-cn' }, parts.join(' / '))));
+      continue;
+    }
+    const info = seg.info;
+    if (!seg.plain) continue;
+    items.push(el('span', { class: `pa-item ${info ? '' : 'pa-unknown'}` },
+      el('span', { class: 'pa-tag' }, info?.tag || seg.plain),
+      info?.zh ? el('span', { class: 'pa-cn' }, info.zh) : null));
+  }
+  if (!items.length) {
+    els.paZh.append(el('span', { class: 'pa-empty' }, '未识别到可翻译的标签'));
+  } else {
+    items.forEach((node, i) => {
+      if (i) els.paZh.append(el('span', { class: 'pa-sep' }, '·'));
+      els.paZh.append(node);
+    });
+  }
+
+  // correction hints
+  els.paIssues.innerHTML = '';
+  if (!result.issues.length) {
+    els.paIssues.append(el('span', { class: 'pa-ok' }, '✓ 未发现明显问题'));
+  } else {
+    const fixable = result.issues.filter((x) => x.fix);
+    if (fixable.length > 1) {
+      els.paIssues.append(el('button', {
+        class: 'pa-fix pa-fix-all',
+        type: 'button',
+        onclick: (e) => {
+          e.stopPropagation();
+          applyPromptFix(ui, applyAllFixes(state.prompt, fixable));
+        },
+      }, '全部修正'));
+    }
+    for (const issue of result.issues) {
+      const row = el('span', { class: `pa-issue pa-${issue.level}` },
+        el('span', { class: 'pa-msg' }, issue.message));
+      if (issue.fix) {
+        row.append(el('button', {
+          class: 'pa-fix',
+          type: 'button',
+          onclick: (e) => {
+            e.stopPropagation();
+            applyPromptFix(ui, issue.fix(state.prompt));
+          },
+        }, '修正'));
+      }
+      els.paIssues.append(row);
+    }
+  }
+}
+
+function applyPromptFix(ui, newText) {
+  if (newText == null || newText === state.prompt) return;
+  const ta = ui.els.prompt;
+  ta.value = newText;
+  state.prompt = newText;
+  save();
+  updatePromptUI(ui);
+  toast('已应用修正', 'ok', 1200);
 }
 
 function syncHighlightScroll() {
@@ -1927,7 +2039,10 @@ function showSuggest(ui, items, frag) {
         e.preventDefault();
         applySuggestion(ui, item);
       },
-    }, el('span', { class: 'tag-name' }, item.label), meta);
+    },
+      el('span', { class: 'tag-name' }, item.label),
+      item.zh ? el('span', { class: 'tag-zh' }, item.zh) : null,
+      meta);
     pop.append(b);
   });
 }

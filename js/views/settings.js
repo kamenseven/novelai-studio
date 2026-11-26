@@ -58,6 +58,7 @@ export function mount(container) {
     const genCard = card('生成偏好',
       switchRow('流式预览（实时查看采样过程）', state.stream, (v) => { state.stream = v; save(); }),
       switchRow('语法高亮（提示词着色）', state.highlight, (v) => { state.highlight = v; save(); }),
+      switchRow('提示词助手（中文翻译 / 纠错）', state.showPromptAssist !== false, (v) => { state.showPromptAssist = v; save(); }),
       switchRow('自动保存到图库', state.autosave, (v) => { state.autosave = v; save(); }),
       el('div', { class: 'field' },
         el('div', { class: 'field-head' }, el('span', { class: 'field-label' }, '并发请求数')),
