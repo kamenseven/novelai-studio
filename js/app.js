@@ -27,7 +27,6 @@ export async function boot() {
   renderShell();
   window.addEventListener('hashchange', onHash);
   onHash();
-  document.querySelectorAll('.plugin-tools').forEach(() => {});
   registerSW();
   window.addEventListener('online', () => toast('网络已恢复', 'ok'));
   window.addEventListener('offline', () => toast('网络已断开', 'error'));

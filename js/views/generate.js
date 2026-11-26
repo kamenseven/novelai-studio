@@ -16,7 +16,7 @@ import {
 } from '../prompt.js';
 import {
   $, $$, el, svg, escapeHTML, clamp, debounce, uuid, randomSeed, dataURLToBlob,
-  blobToDataURL, loadImage, canvasToBlob, fitReferenceCanvas, downloadBlob, sanitizeFilename, t,
+  blobToDataURL, loadImage, canvasToBlob, fitReferenceCanvas, downloadBlob, sanitizeFilename, t, idb,
 } from '../util.js';
 import {
   toast, modal, confirmDialog, openViewer, segmented, select, slider, switchRow, accordion, iconBtn,
@@ -931,6 +931,20 @@ async function addVibeFromFile(ui, file) {
     state.vibes = state.vibes.filter((v) => v.id !== item.id);
   } finally {
     item.encoding = false;
+    if (item.encodedB64) {
+      try {
+        await idb.put('assets', {
+          id: item.id,
+          kind: 'vibe',
+          encodedB64: item.encodedB64,
+          preview: item.preview,
+          name: item.name,
+          blob: item.blob,
+        });
+      } catch (e) {
+        console.warn('vibe cache failed', e);
+      }
+    }
     renderVibes(ui);
     save();
   }

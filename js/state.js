@@ -30,7 +30,7 @@ export function save() {
 }
 
 function doSave() {
-  const clean = JSON.parse(JSON.stringify(state, (k, v) => (k === 'results' || k === 'session' || k === 'account' ? undefined : v)));
+  const clean = JSON.parse(JSON.stringify(state, (k, v) => (['results', 'session', 'account', '_abort'].includes(k) ? undefined : v)));
   for (const v of clean.vibes || []) {
     delete v.encodedB64;
   }
