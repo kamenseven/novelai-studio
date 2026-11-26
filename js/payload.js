@@ -6,9 +6,6 @@ import { blobToB64 } from './api.js';
 import { applyPromptTransforms } from './plugins.js';
 
 export function effectiveModel(state) {
-  if (state.model === 'nai-diffusion-5-full' && state.effort === 'medium') {
-    return 'nai-diffusion-5-full-medium';
-  }
   return state.model;
 }
 
@@ -40,7 +37,8 @@ export async function buildRequest(state, { baseImage, mask, actionOverride } = 
     preparePrompt(state.prompt, model, { quality: state.quality, furry: state.furry }),
     state,
   );
-  const negative = withUCPreset(state.negative, model, ep.uc);
+  const medium = model === 'nai-diffusion-5-full-medium';
+  const negative = medium ? withUCPreset('', model, 'heavy') : withUCPreset(state.negative, model, ep.uc);
   const seed = state.seed === '' || state.seed == null ? undefined : Math.trunc(Number(state.seed)) || 0;
 
   const chars = (state.characters || []).filter((c) => c && c.prompt && c.prompt.trim());

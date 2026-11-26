@@ -10,7 +10,7 @@ export const TIERS = { 0: 'Free', 1: 'Paper', 2: 'Tablet', 3: 'Opus' };
 export const MODELS = [
   { id: 'nai-diffusion-5-full', label: 'V5 Full', short: 'V5F', family: 'v5', version: 'V5', kind: 'full', subtitle: '最新 · 自然语言 · 透明背景 · 32 角色' },
   { id: 'nai-diffusion-5-curated', label: 'V5 Curated', short: 'V5C', family: 'v5', version: 'V5', kind: 'curated', subtitle: '最新 · 更安全的精选数据集' },
-  { id: 'nai-diffusion-5-full-medium', label: 'V5 Full (Medium)', short: 'V5M', family: 'v5', version: 'V5', kind: 'medium', hidden: true },
+  { id: 'nai-diffusion-5-full-medium', label: 'V5 Full Medium', short: 'V5M', family: 'v5', version: 'V5', kind: 'medium', subtitle: '14 步蒸馏模型 · 更快更省 · 固定 Euler A / Heavy UC' },
   { id: 'nai-diffusion-4-5-full', label: 'V4.5 Full', short: 'V45F', family: 'v45', version: 'V4.5', kind: 'full' },
   { id: 'nai-diffusion-4-5-curated', label: 'V4.5 Curated', short: 'V45C', family: 'v45', version: 'V4.5', kind: 'curated' },
   { id: 'nai-diffusion-4-full', label: 'V4 Full', short: 'V4F', family: 'v4', version: 'V4', kind: 'full' },

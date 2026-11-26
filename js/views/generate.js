@@ -78,8 +78,6 @@ export function mount(container) {
     stageMeta: $('#stageMeta', container),
     stageActions: $('#stageActions', container),
     controls: $('#controls', container),
-    btnParams: $('#btnParams', container),
-    backdrop: $('#panelBackdrop', container),
     tokenWarn: $('#tokenWarn', container),
     qualityRow: $('#qualityRow', container),
     negativeCount: $('#negativeCount', container),
@@ -106,8 +104,7 @@ export function mount(container) {
 function template() {
   return `
   <div class="gen">
-    <aside class="controls" id="controls">
-      <div class="model-card card" id="modelCard">
+    <aside class="controls" id="controls">      <div class="model-card card" id="modelCard">
         <button class="model-btn" id="modelBtn">
           <span class="model-badge" id="modelBadge">V5</span>
           <span class="model-info">
@@ -236,8 +233,6 @@ function template() {
       </div>
     </aside>
 
-    <div class="panel-backdrop" id="panelBackdrop" hidden></div>
-
     <section class="stage">
       <div class="stage-head">
         <div class="stage-meta" id="stageMeta"></div>
@@ -261,7 +256,6 @@ function template() {
         </div>
       </div>
       <div class="result-strip" id="resultStrip"></div>
-      <button class="btn btn-float" id="btnParams">${svg('sliders')} 参数</button>
     </section>
   </div>`;
 }
@@ -273,10 +267,14 @@ function bind(ui) {
 
   els.modelBtn.addEventListener('click', () => openModelSheet(ui));
   els.effortBtn.addEventListener('click', () => {
-    if (!capsFor(state.model).effort) return;
-    state.effort = state.effort === 'high' ? 'medium' : 'high';
+    const medium = state.model === 'nai-diffusion-5-full-medium';
+    if (!medium && state.model !== 'nai-diffusion-5-full') return;
+    state.model = medium ? 'nai-diffusion-5-full' : 'nai-diffusion-5-full-medium';
+    state.effort = medium ? 'high' : 'medium';
+    applyModelDefaults(ui);
     save();
     renderAll(ui);
+    toast(medium ? '已切换 High effort（V5 Full）' : '已切换 Medium effort（14 步蒸馏）', 'ok', 1800);
   });
   els.furryBtn.addEventListener('click', () => {
     if (!capsFor(state.model).furryMode) return;
@@ -394,8 +392,6 @@ function bind(ui) {
   }
 
   els.genBtn.addEventListener('click', () => enqueue(ui));
-  els.btnParams.addEventListener('click', () => openControls(ui));
-  els.backdrop.addEventListener('click', () => closeControls(ui));
 
   $('#addChar', ui.container).addEventListener('click', () => addCharacter(ui));
   $('#addVibe', ui.container).addEventListener('click', () => pickVibeImages(ui));
@@ -433,14 +429,16 @@ function renderHeader(ui) {
   const { els } = ui;
   const model = MODEL_MAP[effectiveModel(state)] || MODELS[0];
   const caps = capsFor(effectiveModel(state));
+  const medium = effectiveModel(state) === 'nai-diffusion-5-full-medium';
   els.modelBadge.textContent = model.version || 'V5';
   els.modelName.textContent = model.label;
-  els.modelSub.textContent = model.subtitle || `${caps.charMax ? caps.charMax + ' 角色' : '基础'} · ${caps.textMax ? '文字渲染' : ''}`;
   els.modelSub.textContent = model.subtitle || '';
+  els.modelSub.classList.toggle('warn-text', medium);
 
-  els.effortBtn.hidden = !caps.effort;
-  els.effortBtn.textContent = `Effort · ${state.effort === 'medium' ? 'Medium' : 'High'}`;
-  els.effortBtn.classList.toggle('active', state.effort === 'medium');
+  const effortAvailable = effectiveModel(state) === 'nai-diffusion-5-full' || medium;
+  els.effortBtn.hidden = !effortAvailable;
+  els.effortBtn.textContent = `Effort · ${medium ? 'Medium' : 'High'}`;
+  els.effortBtn.classList.toggle('active', medium);
   els.furryBtn.hidden = !caps.furryMode;
   els.furryBtn.classList.toggle('active', !!state.furry);
   els.transparentBtn.hidden = !caps.transparent;
@@ -514,14 +512,22 @@ function renderHeaderActions(ui) {
 
 function renderQualityOptions(ui) {
   const { els } = ui;
+  const medium = effectiveModel(state) === 'nai-diffusion-5-full-medium';
   const quality = [
     { v: 'standard', l: '标准' },
     { v: 'light', l: '轻量' },
     { v: 'none', l: '关闭' },
   ];
   els.quality.innerHTML = quality.map((q) => `<option value="${q.v}"${state.quality === q.v ? ' selected' : ''}>${q.l}</option>`).join('');
+  if (medium) state.uc = 'heavy';
   const ucs = ucPresets(effectiveModel(state));
   els.ucSel.innerHTML = ucs.map((u) => `<option value="${u}"${state.uc === u ? ' selected' : ''}>${u === 'none' ? '无' : u.replace('_', ' ')}</option>`).join('');
+  els.ucSel.disabled = medium;
+  els.negative.disabled = medium;
+  els.negative.placeholder = medium
+    ? 'Medium effort 固定使用 Heavy 预设，不支持自定义负面提示词'
+    : 'lowres, bad anatomy, ...';
+  if (medium) els.negative.value = '';
 }
 
 function updatePromptUI(ui) {
@@ -579,6 +585,10 @@ function renderAdvanced(ui) {
   const ep = effectiveParams(state);
   els.advancedBody.innerHTML = '';
   const body = els.advancedBody;
+  if (medium) {
+    body.append(el('div', { class: 'notice' },
+      'Medium effort：固定 14 步、Euler Ancestral、Heavy 负面预设；采样器 / 负面提示词 / CFG Rescale 不可改。'));
+  }
 
   // steps + guidance
   const stepsField = slider({
@@ -611,13 +621,15 @@ function renderAdvanced(ui) {
   }));
 
   // sampler
+  const samplerSelect = select(samplersFor(model).map((s) => ({ value: s.id, label: s.label })), medium ? 'k_euler_ancestral' : state.sampler, (v) => {
+    state.sampler = v;
+    save();
+    updateCost(ui);
+  });
+  if (medium) samplerSelect.disabled = true;
   const samplerWrap = el('div', { class: 'field' },
-    el('div', { class: 'field-head' }, el('span', { class: 'field-label' }, '采样器 Sampler')),
-    select(samplersFor(model).map((s) => ({ value: s.id, label: s.label })), state.sampler, (v) => {
-      state.sampler = v;
-      save();
-      updateCost(ui);
-    }));
+    el('div', { class: 'field-head' }, el('span', { class: 'field-label' }, '采样器 Sampler'), medium ? el('span', { class: 'field-hint' }, '固定') : null),
+    samplerSelect);
   body.append(samplerWrap);
 
   if (caps.noiseSchedule) {
@@ -665,7 +677,7 @@ function renderAdvanced(ui) {
     },
   }));
 
-  if (caps.cfgRescale) {
+  if (caps.cfgRescale && !medium) {
     body.append(slider({
       label: 'Prompt Guidance Rescale',
       min: 0,
@@ -1635,19 +1647,10 @@ function updateCost(ui) {
 
 /* ------------------------------------------------------------------- sheets */
 
-function openControls(ui) {
-  ui.els.controls.classList.add('open');
-  ui.els.backdrop.hidden = false;
-}
-function closeControls(ui) {
-  ui.els.controls.classList.remove('open');
-  ui.els.backdrop.hidden = true;
-}
-
 function openModelSheet(ui) {
   const body = el('div', { class: 'model-sheet' });
   const groups = [
-    { title: 'V5 · 最新', ids: ['nai-diffusion-5-full', 'nai-diffusion-5-curated'] },
+    { title: 'V5 · 最新', ids: ['nai-diffusion-5-full', 'nai-diffusion-5-full-medium', 'nai-diffusion-5-curated'] },
     { title: 'V4.5', ids: ['nai-diffusion-4-5-full', 'nai-diffusion-4-5-curated'] },
     { title: 'V4', ids: ['nai-diffusion-4-full', 'nai-diffusion-4-curated-preview'] },
     { title: 'V3', ids: ['nai-diffusion-3', 'nai-diffusion-furry-3'] },
@@ -1656,12 +1659,12 @@ function openModelSheet(ui) {
     body.append(el('div', { class: 'sheet-group-title' }, g.title));
     for (const id of g.ids) {
       const model = MODEL_MAP[id];
-      const active = effectiveModel(state) === id || (id === 'nai-diffusion-5-full' && effectiveModel(state) === 'nai-diffusion-5-full-medium');
+      const active = effectiveModel(state) === id;
       const row = el('button', {
         class: `model-row ${active ? 'active' : ''}`,
         onclick: () => {
-          if (id === 'nai-diffusion-5-full') state.effort = state.effort || 'high';
           state.model = id;
+          state.effort = id === 'nai-diffusion-5-full-medium' ? 'medium' : 'high';
           applyModelDefaults(ui);
           save();
           sheet.close();
@@ -1676,19 +1679,28 @@ function openModelSheet(ui) {
       body.append(row);
     }
   }
-  body.append(el('p', { class: 'hint' }, 'V5 支持自然语言、32 角色、透明背景与更强的文字渲染。V5 Full 可切换 Medium effort（14 步，更快更省）。'));
+  body.append(el('p', { class: 'hint' }, 'V5 Full Medium 是 14 步蒸馏模型：固定 Euler Ancestral、Heavy 负面预设，不能自定义负面提示词与 CFG Rescale，速度更快、用量更省。'));
   const sheet = modal({ title: '选择模型', body });
 }
 
 function applyModelDefaults(ui) {
-  const caps = capsFor(effectiveModel(state));
+  const model = effectiveModel(state);
+  const caps = capsFor(model);
+  const medium = model === 'nai-diffusion-5-full-medium';
   state.scale = caps.scaleDefault;
-  state.steps = effectiveModel(state) === 'nai-diffusion-5-full-medium' ? 14 : caps.stepsDefault;
-  if (!samplersFor(effectiveModel(state)).some((s) => s.id === state.sampler)) state.sampler = 'k_euler_ancestral';
-  if (caps.noiseSchedule && !schedulesFor(effectiveModel(state)).some((s) => s.id === state.schedule)) state.schedule = 'karras';
+  state.steps = medium ? 14 : caps.stepsDefault;
+  if (medium) {
+    state.sampler = 'k_euler_ancestral';
+    state.uc = 'heavy';
+    state.negative = '';
+    state.cfgRescale = 0;
+  } else if (!samplersFor(model).some((s) => s.id === state.sampler)) {
+    state.sampler = 'k_euler_ancestral';
+  }
+  if (caps.noiseSchedule && !schedulesFor(model).some((s) => s.id === state.schedule)) state.schedule = 'karras';
   if (!caps.furryMode) state.furry = false;
   if (!caps.transparent) state.transparent = false;
-  state.uc = ucPresets(effectiveModel(state)).includes(state.uc) ? state.uc : 'heavy';
+  state.uc = ucPresets(model).includes(state.uc) ? state.uc : 'heavy';
   state.characters = state.characters.slice(0, caps.charMax || 0);
   save();
 }

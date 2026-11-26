@@ -10,7 +10,7 @@
 
 **模型**
 
-- V5 Full / V5 Curated（含 V5 Full Medium effort：14 步蒸馏模型）
+- V5 Full / V5 Full Medium（14 步蒸馏，更快更省）/ V5 Curated
 - V4.5 Full / Curated
 - V4 Full / Curated
 - Anime V3 / Furry V3

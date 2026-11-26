@@ -61,6 +61,9 @@ export async function init() {
   setLang(state.lang);
   setToken(state.token);
   setBase(state.base);
+  if (state.model === 'nai-diffusion-5-full' && state.effort === 'medium') {
+    state.model = 'nai-diffusion-5-full-medium';
+  }
   await restoreAssets();
   emit('init');
 }
