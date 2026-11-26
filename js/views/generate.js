@@ -244,7 +244,7 @@ function template() {
           <div class="stage-empty" id="stageEmpty">
             <div class="se-icon">${svg('spark')}</div>
             <div class="se-title">开始你的创作</div>
-            <div class="se-sub">在左侧填写提示词，点击生成图片</div>
+            <div class="se-sub">填写提示词，点击下方「生成图片」</div>
           </div>
           <div class="stage-progress" id="stageProgress" hidden>
             <img class="progress-thumb" id="progressThumb" alt="" />
