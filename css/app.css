@@ -120,6 +120,10 @@ body[data-route='generate'] .view {
   padding-bottom: calc(112px + env(safe-area-inset-bottom));
   min-height: calc(100dvh - var(--header-h));
 }
+body[data-route='generate'] .controls {
+  max-height: none;
+  overflow: visible;
+}
 body[data-route='generate'] .stage { height: calc(100dvh - var(--header-h) - 108px); }
 body.gsp-open { overflow: hidden; }
 
@@ -590,8 +594,8 @@ textarea.input { resize: vertical; line-height: 1.55; }
 .prompt-wrap { position: relative; border: 1px solid var(--line); border-radius: 12px; background: var(--input-bg); overflow: hidden; }
 .prompt-wrap:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .prompt-hl, .prompt-input {
-  font: 13px/1.62 ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, 'PingFang SC', monospace;
-  padding: 10px 12px;
+  font: 12px/1.52 ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, 'PingFang SC', monospace;
+  padding: 8px 10px;
   white-space: pre-wrap;
   overflow-wrap: break-word;
   word-break: break-word;
@@ -607,11 +611,12 @@ textarea.input { resize: vertical; line-height: 1.55; }
 .prompt-input {
   position: relative;
   width: 100%;
-  min-height: 128px;
+  min-height: 120px;
   max-height: none;
   height: auto;
+  field-sizing: content;
   resize: none;
-  overflow-y: hidden;
+  overflow: hidden;
   border: 0;
   outline: none;
   background: transparent;
@@ -761,9 +766,10 @@ textarea.input { resize: vertical; line-height: 1.55; }
 .char-tools { display: flex; }
 .char-prompt, .char-uc {
   width: 100%; background: var(--input-bg); border: 1px solid var(--line); border-radius: 8px;
-  color: var(--text); padding: 7px 9px; font: 12px/1.5 ui-monospace, monospace; outline: none; resize: vertical;
+  color: var(--text); padding: 7px 9px; font: 11.5px/1.5 ui-monospace, monospace; outline: none;
+  resize: none; overflow: hidden; field-sizing: content; min-height: 52px; max-height: none;
 }
-.char-uc { font-family: inherit; }
+.char-uc { font-family: inherit; min-height: 44px; }
 .char-card .btn-xs { align-self: flex-start; }
 
 .vibes-box, .refs-box { display: flex; flex-direction: column; gap: 8px; }
@@ -1243,8 +1249,9 @@ textarea.input { resize: vertical; line-height: 1.55; }
     border-radius: 14px;
     box-shadow: var(--shadow);
   }
-  .prompt-input { min-height: 120px; font-size: 16px; }
-  .prompt-hl { font-size: 16px; }
+  .prompt-input { min-height: 120px; font-size: 12px; }
+  .prompt-hl { font-size: 12px; }
+  .char-prompt, .char-uc { font-size: 11.5px; }
   .neg-input { font-size: 16px; }
   .gallery-head { position: sticky; top: var(--header-h); z-index: 5; background: var(--bg); padding: 8px 0; margin: -8px 0 8px; }
   .gallery-grid { grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 8px; }

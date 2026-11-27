@@ -1027,14 +1027,20 @@ function updatePromptUI(ui) {
   els.negativeCount.textContent = estimateTokens(state.negative);
   els.negToggle.classList.toggle('open', !els.negWrap.hidden);
   autoGrowPrompt(ui);
+  requestAnimationFrame(() => autoGrowPrompt(ui));
   schedulePromptAssist(ui);
 }
 
-function autoGrowPrompt(ui) {
-  const ta = ui.els.prompt;
+function autoGrowArea(ta, min = 54) {
   if (!ta) return;
   ta.style.height = 'auto';
-  ta.style.height = `${Math.max(ta.scrollHeight, 128)}px`;
+  const cs = getComputedStyle(ta);
+  const border = (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0);
+  ta.style.height = `${Math.max(ta.scrollHeight + border + 1, min)}px`;
+}
+
+function autoGrowPrompt(ui) {
+  autoGrowArea(ui.els.prompt, 120);
 }
 
 let assistTimer;
@@ -1540,12 +1546,14 @@ function renderCharacters(ui) {
     prompt.value = c.prompt || '';
     prompt.addEventListener('input', () => {
       state.characters[i].prompt = prompt.value;
+      autoGrowArea(prompt, 54);
       save();
     });
-    const uc = el('input', { class: 'char-uc', placeholder: '该角色的负面提示词（可选）' });
+    const uc = el('textarea', { class: 'char-uc', rows: 1, placeholder: '该角色的负面提示词（可选）' });
     uc.value = c.uc || '';
     uc.addEventListener('input', () => {
       state.characters[i].uc = uc.value;
+      autoGrowArea(uc, 44);
       save();
     });
     const posBtn = el('button', { class: 'btn btn-xs' },
@@ -1554,6 +1562,8 @@ function renderCharacters(ui) {
     posBtn.addEventListener('click', () => openPositionEditor(ui, i));
     card.append(head, prompt, uc, posBtn);
     els.charsBox.append(card);
+    autoGrowArea(prompt, 54);
+    autoGrowArea(uc, 44);
   });
   if (!state.characters.length) {
     els.charsBox.append(el('div', { class: 'hint' }, '添加角色提示词，可分别描述多个角色并指定位置。'));
