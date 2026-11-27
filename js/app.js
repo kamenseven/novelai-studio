@@ -79,7 +79,6 @@ function renderShell() {
     </header>
     <div class="token-banner" id="tokenBanner" hidden>
       <span>还没有配置 NovelAI Token，生成功能不可用。</span>
-      <button class="btn btn-xs" id="goSettings">去设置</button>
     </div>
     <main class="view" id="view"></main>
     <nav class="tabbar">
@@ -87,7 +86,6 @@ function renderShell() {
       <button class="tab" data-tab="gallery">${svg('image')}<span>图库</span></button>
       <button class="tab" data-tab="batch">${svg('grid')}<span>批量</span></button>
       <button class="tab" data-tab="tools">${svg('wand')}<span>工具</span></button>
-      <button class="tab" data-tab="settings">${svg('settings')}<span>设置</span></button>
     </nav>`;
 
   $('#themeBtn').addEventListener('click', () => {
@@ -97,14 +95,12 @@ function renderShell() {
     renderThemeIcon();
     import('./state.js').then((m) => m.save());
   });
-  $('#accountChip').addEventListener('click', () => navigate('#/settings'));
   $('#menuBtn').addEventListener('click', () => {
     const items = [
       ['生成', 'generate', 'bolt'],
       ['图库', 'gallery', 'image'],
       ['批量矩阵', 'batch', 'grid'],
       ['工具', 'tools', 'wand'],
-      ['应用设置', 'settings', 'settings'],
     ];
     const body = el('div', { class: 'director-sheet' });
     const m = modal({ title: '菜单', body });
@@ -119,7 +115,7 @@ function renderShell() {
       body.append(b);
     }
   });
-  $('#goSettings').addEventListener('click', () => navigate('#/settings'));
+  $('#goSettings')?.addEventListener('click', () => navigate('#/settings'));
   document.querySelectorAll('[data-tab]').forEach((b) => {
     b.addEventListener('click', () => navigate('#/' + b.dataset.tab));
   });

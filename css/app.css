@@ -133,7 +133,7 @@ body.gsp-open { overflow: hidden; }
   height: calc(var(--tab-h) + env(safe-area-inset-bottom));
   padding: 6px 10px env(safe-area-inset-bottom);
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 4px;
   background: color-mix(in srgb, var(--bg) 92%, transparent);
   backdrop-filter: blur(16px);
@@ -517,8 +517,9 @@ textarea.input { resize: vertical; line-height: 1.55; }
   background: transparent;
   border-color: var(--line-soft);
 }
-.dock-buttons { display: grid; grid-template-columns: 1fr 1.9fr; gap: 8px; }
+.dock-buttons { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px; }
 .dock-buttons .btn { height: 46px; font-size: 14px; border-radius: 12px; }
+.dock-settings { font-size: 13px !important; padding: 0 8px; }
 .dock-settings.active { border-color: var(--accent); color: var(--accent-2); background: var(--accent-soft); }
 .dock-buttons .icon { width: 18px; height: 18px; }
 

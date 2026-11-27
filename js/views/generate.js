@@ -31,6 +31,8 @@ import {
   directorResult, toggleFavorite, importMetaFromFile,
 } from '../actions.js';
 
+import { logout } from '../auth.js';
+
 const MAX_VIBES = 16;
 const MAX_REFS = 4;
 const CHAR_COLORS = ['#7d5cff', '#39d3b1', '#ff9f43', '#ff5d7a', '#5aa0ff', '#c084fc', '#ffd166', '#4dd0e1'];
@@ -50,9 +52,7 @@ export function mount(container, opts = {}) {
     genSettings: $('#genSettings', container),
     gspBack: $('#gspBack', container),
     gspSub: $('#gspSub', container),
-    configSummary: $('#configSummary', container),
-    configSummaryText: $('#configSummaryText', container),
-    configSummarySub: $('#configSummarySub', container),
+    gspLogout: $('#gspLogout', container),
     modelBtn: $('#modelBtn', container),
     modelBadge: $('#modelBadge', container),
     modelName: $('#modelName', container),
@@ -140,14 +140,6 @@ function template() {
   return `
   <div class="gen">
     <aside class="controls" id="controls">
-      <button class="config-summary" id="configSummary" type="button">
-        <span class="cs-text">
-          <span class="cs-title" id="configSummaryText">V5 Full</span>
-          <span class="cs-sub" id="configSummarySub"></span>
-        </span>
-        <span class="cs-action">模型与参数 ${svg('chevron')}</span>
-      </button>
-
       <div class="card prompt-card">
         <div class="card-head">
           <span class="card-title">提示词</span>
@@ -329,7 +321,7 @@ function template() {
           <button class="btn btn-sm" type="button" data-goto="gallery">图库</button>
           <button class="btn btn-sm" type="button" data-goto="batch">批量矩阵</button>
           <button class="btn btn-sm" type="button" data-goto="tools">工具</button>
-          <button class="btn btn-sm" type="button" data-goto="settings">应用设置</button>
+          <button class="btn btn-sm btn-danger" type="button" id="gspLogout">退出登录</button>
         </div>
       </div>
     </div>
@@ -355,7 +347,7 @@ function bind(ui) {
   els.modelBtn.addEventListener('click', () => openModelSheet(ui));
   els.settingsBtn.addEventListener('click', () => toggleGenSettings(ui));
   els.gspBack.addEventListener('click', () => closeGenSettings(ui));
-  els.configSummary.addEventListener('click', () => openGenSettings(ui));
+  els.gspLogout?.addEventListener('click', () => logout());
   for (const b of $$('[data-goto]', ui.container)) {
     b.addEventListener('click', () => {
       closeGenSettings(ui);
@@ -620,15 +612,6 @@ function renderHeader(ui) {
   els.genBtn.classList.toggle('busy', busy > 0);
 
   const ep = effectiveParams(state);
-  const activeStyle = getActiveStyle(state, effectiveModel(state));
-  const modeLabel = state.mode === 'i2i' ? '图生图' : state.mode === 'inpaint' ? '局部重绘' : '文生图';
-  els.configSummaryText.textContent = `${model.label} · ${state.width} × ${state.height}`;
-  els.configSummarySub.textContent = [
-    modeLabel,
-    `${ep.steps} 步`,
-    `CFG ${Number(ep.scale).toFixed(1)}`,
-    activeStyle ? activeStyle.name : '无风格',
-  ].join(' · ');
   if (els.gspSub) els.gspSub.textContent = `${model.label} · ${state.width}×${state.height} · ${ep.steps} 步`;
   els.settingsBtn.classList.toggle('active', !!ui.settingsOpen);
 
@@ -638,15 +621,6 @@ function renderHeader(ui) {
 function updateConfigSummary(ui) {
   const model = MODEL_MAP[effectiveModel(state)] || MODELS[0];
   const ep = effectiveParams(state);
-  const style = getActiveStyle(state, effectiveModel(state));
-  const modeLabel = state.mode === 'i2i' ? '图生图' : state.mode === 'inpaint' ? '局部重绘' : '文生图';
-  ui.els.configSummaryText.textContent = `${model.label} · ${state.width} × ${state.height}`;
-  ui.els.configSummarySub.textContent = [
-    modeLabel,
-    `${ep.steps} 步`,
-    `CFG ${Number(ep.scale).toFixed(1)}`,
-    style ? style.name : '无风格',
-  ].join(' · ');
   if (ui.els.gspSub) ui.els.gspSub.textContent = `${model.label} · ${state.width}×${state.height} · ${ep.steps} 步`;
 }
 
