@@ -66,6 +66,7 @@ export function mount(container, opts = {}) {
     styleBtn: $('#styleBtn', container),
     styleName: $('#styleName', container),
     tagBtn: $('#tagBtn', container),
+    assistToggle: $('#assistToggle', container),
     formatBtn: $('#formatBtn', container),
     modeTabs: $('#modeTabs', container),
     prompt: $('#promptInput', container),
@@ -187,6 +188,7 @@ function template() {
             <select id="qualitySel" class="mini-select"></select>
           </label>
           <div class="prompt-bar-actions">
+            <button class="mini-toggle" id="assistToggle" title="显示/隐藏中文翻译">翻译</button>
             <button class="mini-toggle" id="formatBtn" title="自动整理格式">格式化</button>
             <button class="mini-toggle" id="tagBtn" title="Tag 词典">Tag</button>
             <button class="mini-toggle" id="negToggle">负面提示词 <span class="chev">${svg('chevron')}</span></button>
@@ -366,6 +368,12 @@ function bind(ui) {
   setupMetaDrop(ui);
   els.styleBtn.addEventListener('click', () => openStyleSheet(ui));
   els.tagBtn.addEventListener('click', () => openTagBrowser(ui));
+  els.assistToggle.addEventListener('click', () => {
+    state.showPromptAssist = state.showPromptAssist === false;
+    save();
+    els.assistToggle.classList.toggle('active', state.showPromptAssist !== false);
+    renderPromptAssist(ui);
+  });
   els.formatBtn.addEventListener('click', async () => {
     if (!state.prompt.trim()) return toast('提示词为空', 'info');
     await loadTags();
@@ -618,6 +626,7 @@ function renderHeader(ui) {
   for (const b of $$('.mode-tab', els.modeTabs)) b.classList.toggle('active', b.dataset.mode === state.mode);
   els.genBtn.querySelector('.gen-label').textContent = state.mode === 'inpaint' ? '局部重绘' : '生成';
   els.genBtn.classList.toggle('busy', busy > 0);
+  els.assistToggle.classList.toggle('active', state.showPromptAssist !== false);
 
   const ep = effectiveParams(state);
   if (els.gspSub) els.gspSub.textContent = `${model.label} · ${state.width}×${state.height} · ${ep.steps} 步`;
@@ -1048,7 +1057,7 @@ function autoGrowArea(ta, min = 54) {
 }
 
 function autoGrowPrompt(ui) {
-  autoGrowArea(ui.els.prompt, 84);
+  autoGrowArea(ui.els.prompt, 64);
 }
 
 let assistTimer;
