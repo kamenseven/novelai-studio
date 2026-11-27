@@ -33,6 +33,15 @@ import {
 
 const MAX_VIBES = 16;
 const MAX_REFS = 4;
+const CHAR_COLORS = ['#7d5cff', '#39d3b1', '#ff9f43', '#ff5d7a', '#5aa0ff', '#c084fc', '#ffd166', '#4dd0e1'];
+
+function characterColor(i) {
+  return CHAR_COLORS[i % CHAR_COLORS.length];
+}
+
+function characterLabel(i) {
+  return String.fromCharCode(65 + (i % 26));
+}
 
 export function mount(container, opts = {}) {
   container.innerHTML = template();
@@ -1540,7 +1549,10 @@ function renderCharacters(ui) {
   state.characters.forEach((c, i) => {
     const card = el('div', { class: 'char-card' });
     const head = el('div', { class: 'char-head' },
-      el('span', { class: 'char-idx' }, String.fromCharCode(65 + (i % 26))),
+      el('span', {
+        class: 'char-idx',
+        style: { background: `${characterColor(i)}22`, color: characterColor(i) },
+      }, characterLabel(i)),
       el('span', { class: 'char-name' }, `角色 ${i + 1}`),
       el('div', { class: 'char-tools' },
         iconBtn('up', () => moveCharacter(ui, i, -1), '上移'),
@@ -1588,11 +1600,23 @@ function addCharacter(ui) {
     toast(`该模型最多 ${caps.charMax} 个角色提示词`, 'error');
     return;
   }
+  const index = state.characters.length;
+  let x = 0.5;
+  let y = 0.5;
+  if (caps.charPos === 'grid') {
+    const cells = [[3, 3], [2, 3], [4, 3], [3, 2], [3, 4], [2, 2], [4, 4], [2, 4], [4, 2]];
+    const [gx, gy] = cells[index % cells.length];
+    x = gx / 6;
+    y = gy / 6;
+  } else {
+    x = index % 2 === 0 ? 0.32 : 0.68;
+    y = 0.5;
+  }
   state.characters.push({
     prompt: '',
     uc: '',
-    x: 0.5,
-    y: 0.5,
+    x,
+    y,
     enabled: true,
   });
   if (state.characters.length === 1) state.charPosMode = 'ai';
@@ -1605,61 +1629,116 @@ function openPositionEditor(ui, i) {
   const c = state.characters[i];
   const caps = capsFor(effectiveModel(state));
   const body = el('div', { class: 'pos-editor' });
+  const hint = el('p', { class: 'hint' },
+    caps.charPos === 'grid'
+      ? 'V4 / V4.5：点网格移动当前角色；其他角色仅作参考，不会被移动'
+      : 'V5：拖动当前角色；其他角色位置仅作参考，不会被移动');
+
+  const legend = el('div', { class: 'pos-legend' });
+  state.characters.forEach((ch, idx) => {
+    legend.append(el('span', { class: `pos-legend-item ${idx === i ? 'current' : ''}` },
+      el('span', { class: 'pos-dot', style: { background: characterColor(idx) } }),
+      el('span', { class: 'pos-label' }, characterLabel(idx)),
+      el('span', { class: 'pos-tag' }, idx === i ? '当前' : '锁定'),
+      el('span', { class: 'pos-prompt' }, (ch.prompt || '').slice(0, 16))));
+  });
+
+  const makePins = (container) => {
+    const pins = [];
+    state.characters.forEach((ch, idx) => {
+      const pin = el('div', {
+        class: `pos-pin ${idx === i ? 'current' : 'other'}`,
+        title: idx === i ? '拖动当前角色' : `角色 ${characterLabel(idx)}（锁定）`,
+      }, characterLabel(idx));
+      pin.style.background = characterColor(idx);
+      pin.style.left = `${clamp(Number(ch.x ?? 0.5), 0.02, 0.98) * 100}%`;
+      pin.style.top = `${clamp(Number(ch.y ?? 0.5), 0.02, 0.98) * 100}%`;
+      container.append(pin);
+      pins.push(pin);
+    });
+    return pins;
+  };
+
   if (caps.charPos === 'grid') {
+    const wrap = el('div', { class: 'pos-grid-wrap' });
     const grid = el('div', { class: 'pos-grid' });
+    const cells = [];
     for (let gy = 0; gy < 5; gy++) {
       for (let gx = 0; gx < 5; gx++) {
         const x = (gx + 1) / 6;
         const y = (gy + 1) / 6;
         const b = el('button', {
-          class: `pos-cell ${Math.abs((c.x ?? 0) - x) < 0.02 && Math.abs((c.y ?? 0) - y) < 0.02 ? 'active' : ''}`,
+          class: `pos-cell ${Math.abs((c.x ?? 0.5) - x) < 0.02 && Math.abs((c.y ?? 0.5) - y) < 0.02 ? 'active' : ''}`,
           type: 'button',
           onclick: () => {
             c.x = x;
             c.y = y;
             save();
-            m.close();
-            renderCharacters(ui);
+            for (const cell of cells) cell.classList.remove('active');
+            b.classList.add('active');
+            const pin = pins[i];
+            pin.style.left = `${x * 100}%`;
+            pin.style.top = `${y * 100}%`;
           },
         });
+        cells.push(b);
         grid.append(b);
       }
     }
-    body.append(el('p', { class: 'hint' }, 'V4 / V4.5 使用 5×5 网格定位'), grid);
+    const pinsLayer = el('div', { class: 'pos-pins' });
+    wrap.append(grid, pinsLayer);
+    const pins = makePins(pinsLayer);
+    body.append(hint, wrap, legend);
   } else {
     const box = el('div', { class: 'pos-free' });
-    const pin = el('div', { class: 'pos-pin' }, String.fromCharCode(65 + i));
-    const setPin = () => {
-      pin.style.left = `${(c.x ?? 0.5) * 100}%`;
-      pin.style.top = `${(c.y ?? 0.5) * 100}%`;
-    };
-    setPin();
-    box.append(pin);
+    const pinsLayer = el('div', { class: 'pos-pins' });
+    box.append(pinsLayer);
+    const pins = makePins(pinsLayer);
+    const current = pins[i];
+    let dragging = false;
     const move = (e) => {
       const r = box.getBoundingClientRect();
       c.x = clamp((e.clientX - r.left) / r.width, 0.02, 0.98);
       c.y = clamp((e.clientY - r.top) / r.height, 0.02, 0.98);
-      setPin();
+      current.style.left = `${c.x * 100}%`;
+      current.style.top = `${c.y * 100}%`;
     };
-    box.addEventListener('pointerdown', (e) => {
-      box.setPointerCapture(e.pointerId);
+    current.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      dragging = true;
+      try {
+        current.setPointerCapture(e.pointerId);
+      } catch {}
       move(e);
-      box.dataset.drag = '1';
     });
-    box.addEventListener('pointermove', (e) => {
-      if (box.dataset.drag) move(e);
+    current.addEventListener('pointermove', (e) => {
+      if (dragging) move(e);
     });
-    box.addEventListener('pointerup', () => {
-      box.dataset.drag = '';
+    const stop = () => {
+      if (!dragging) return;
+      dragging = false;
+      save();
+    };
+    current.addEventListener('pointerup', stop);
+    current.addEventListener('pointercancel', stop);
+    body.append(hint, box, legend);
+  }
+
+  const m = modal({
+    title: `角色位置 · ${characterLabel(i)}`,
+    body,
+    actions: [{
+      label: '完成',
+      primary: true,
+      onClick: () => {
+        save();
+        renderCharacters(ui);
+      },
+    }],
+    onClose: () => {
       save();
       renderCharacters(ui);
-    });
-    body.append(el('p', { class: 'hint' }, 'V5 支持自由定位：拖动标记到画面中的位置'), box);
-  }
-  const m = modal({
-    title: '角色位置',
-    body,
-    actions: [{ label: '完成', primary: true, onClick: () => { save(); renderCharacters(ui); } }],
+    },
   });
 }
 
