@@ -155,6 +155,7 @@ function renderRoute(name) {
   const view = $('#view');
   if (!view) return;
   document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('body > #tagPop').forEach((n) => { n.hidden = true; });
   view.innerHTML = '';
   view.className = `view view-${name}`;
   const route = routes[name];

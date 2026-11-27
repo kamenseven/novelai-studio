@@ -102,6 +102,8 @@ export function mount(container) {
   };
 
   const ui = { els, container };
+  document.querySelectorAll('body > #tagPop').forEach((n) => n.remove());
+  if (els.tagPop) document.body.append(els.tagPop);
   subscribe((type) => {
     if (!container.isConnected) return;
     if (type === 'results') {
@@ -944,7 +946,15 @@ function updatePromptUI(ui) {
   syncHighlightScroll();
   els.negativeCount.textContent = estimateTokens(state.negative);
   els.negToggle.classList.toggle('open', !els.negWrap.hidden);
+  autoGrowPrompt(ui);
   schedulePromptAssist(ui);
+}
+
+function autoGrowPrompt(ui) {
+  const ta = ui.els.prompt;
+  if (!ta) return;
+  ta.style.height = 'auto';
+  ta.style.height = `${Math.max(ta.scrollHeight, 128)}px`;
 }
 
 let assistTimer;
@@ -2284,6 +2294,19 @@ function showSuggest(ui, items, frag) {
       meta);
     pop.append(b);
   });
+  requestAnimationFrame(() => ensurePromptVisible(ui));
+  setTimeout(() => ensurePromptVisible(ui), 220);
+}
+
+function ensurePromptVisible(ui) {
+  const pop = ui.els.tagPop;
+  const ta = ui.els.prompt;
+  if (!pop || !ta || pop.hidden) return;
+  const vh = window.visualViewport?.height || window.innerHeight;
+  const popTop = vh - pop.getBoundingClientRect().height;
+  const rect = ta.getBoundingClientRect();
+  const overlap = rect.bottom - (popTop - 12);
+  if (overlap > 0) window.scrollBy({ top: overlap, behavior: 'smooth' });
 }
 
 function hideSuggest(ui) {
