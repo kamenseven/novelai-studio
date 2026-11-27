@@ -34,9 +34,16 @@ import {
 const MAX_VIBES = 16;
 const MAX_REFS = 4;
 
-export function mount(container) {
+export function mount(container, opts = {}) {
   container.innerHTML = template();
   const els = {
+    settingsBtn: $('#settingsBtn', container),
+    genSettings: $('#genSettings', container),
+    gspBack: $('#gspBack', container),
+    gspSub: $('#gspSub', container),
+    configSummary: $('#configSummary', container),
+    configSummaryText: $('#configSummaryText', container),
+    configSummarySub: $('#configSummarySub', container),
     modelBtn: $('#modelBtn', container),
     modelBadge: $('#modelBadge', container),
     modelName: $('#modelName', container),
@@ -101,7 +108,7 @@ export function mount(container) {
     dropZone: $('#dropZone', container),
   };
 
-  const ui = { els, container };
+  const ui = { els, container, navigate: opts.navigate };
   document.querySelectorAll('body > #tagPop').forEach((n) => n.remove());
   if (els.tagPop) document.body.append(els.tagPop);
   subscribe((type) => {
@@ -123,38 +130,14 @@ export function mount(container) {
 function template() {
   return `
   <div class="gen">
-    <aside class="controls" id="controls">      <div class="model-card card" id="modelCard">
-        <button class="model-btn" id="modelBtn">
-          <span class="model-badge" id="modelBadge">V5</span>
-          <span class="model-info">
-            <span class="model-name" id="modelName">V5 Full</span>
-            <span class="model-sub" id="modelSub"></span>
-          </span>
-          <span class="model-chevron">${svg('chevron')}</span>
-        </button>
-        <div class="model-toggles">
-          <button class="chip" id="effortBtn" title="Effort">Effort · High</button>
-          <button class="chip" id="furryBtn" title="Furry mode">Furry</button>
-          <button class="chip chip-ghost" id="transparentBtn" title="Transparent background">透明背景</button>
-        </div>
-      </div>
-
-      <div class="style-bar card">
-        <button class="style-pick" id="styleBtn">
-          <span class="style-mark">${svg('spark')}</span>
-          <span class="style-info">
-            <span class="style-caption">风格模板</span>
-            <span class="style-name" id="styleName">无风格</span>
-          </span>
-          <span class="style-chev">${svg('chevron')}</span>
-        </button>
-      </div>
-
-      <div class="mode-tabs" id="modeTabs">
-        <button class="mode-tab active" data-mode="t2i"><span>文生图</span></button>
-        <button class="mode-tab" data-mode="i2i"><span>图生图</span></button>
-        <button class="mode-tab" data-mode="inpaint"><span>局部重绘</span></button>
-      </div>
+    <aside class="controls" id="controls">
+      <button class="config-summary" id="configSummary" type="button">
+        <span class="cs-text">
+          <span class="cs-title" id="configSummaryText">V5 Full</span>
+          <span class="cs-sub" id="configSummarySub"></span>
+        </span>
+        <span class="cs-action">模型与参数 ${svg('chevron')}</span>
+      </button>
 
       <div class="card prompt-card">
         <div class="card-head">
@@ -195,36 +178,9 @@ function template() {
         </div>
       </div>
 
-      <div class="card res-card">
-        <div class="card-head">
-          <span class="card-title">分辨率</span>
-          <span class="res-label" id="resLabel">832 × 1216</span>
-        </div>
-        <div class="seg" id="aspectSeg"></div>
-        <div class="seg" id="sizeSeg"></div>
-        <div class="res-custom">
-          <input class="input num" id="resW" type="number" inputmode="numeric" step="64" />
-          <span class="x">×</span>
-          <input class="input num" id="resH" type="number" inputmode="numeric" step="64" />
-          <button class="icon-btn" id="swapRes" title="交换宽高">${svg('swap')}</button>
-        </div>
-        <div class="res-warn" id="resWarn"></div>
-      </div>
-
-      <div class="mode-panel" id="modePanel"></div>
-
-      <section class="acc" id="advanced">
-        <button class="acc-head" type="button" data-acc>
-          <span class="acc-title">高级参数</span>
-          <span class="acc-badge" id="advBadge"></span>
-          <span class="acc-caret">${svg('chevron')}</span>
-        </button>
-        <div class="acc-body"><div class="adv-body" id="advancedBody"></div></div>
-      </section>
-
       <section class="acc" id="charsAcc">
         <button class="acc-head" type="button" data-acc>
-          <span class="acc-title">多角色提示词 <em id="charsCount">0</em></span>
+          <span class="acc-title">多角色提示词 / 位置 <em id="charsCount">0</em></span>
           <span class="acc-caret">${svg('chevron')}</span>
         </button>
         <div class="acc-body">
@@ -236,41 +192,20 @@ function template() {
         </div>
       </section>
 
-      <section class="acc" id="vibesAcc">
-        <button class="acc-head" type="button" data-acc>
-          <span class="acc-title">Vibe 迁移 <em id="vibesCount">0</em></span>
-          <span class="acc-caret">${svg('chevron')}</span>
-        </button>
-        <div class="acc-body">
-          <div class="hint" id="vibesHint"></div>
-          <div class="vibes-box" id="vibesBox"></div>
-          <div class="acc-actions">
-            <button class="btn btn-sm" id="addVibe">${svg('plus')} 添加参考</button>
-            <button class="btn btn-sm" id="exportVibes">导出</button>
-            <button class="btn btn-sm" id="importVibeFile">导入 .naiv4vibe</button>
-          </div>
-          <div id="vibeNormalize"></div>
+      <div class="card res-card">
+        <div class="card-head">
+          <span class="card-title">图片尺寸</span>
+          <span class="res-label" id="resLabel">832 × 1216</span>
         </div>
-      </section>
-
-      <section class="acc" id="refsAcc">
-        <button class="acc-head" type="button" data-acc>
-          <span class="acc-title">精准参考 Precise Ref <em id="refsCount">0</em></span>
-          <span class="acc-caret">${svg('chevron')}</span>
-        </button>
-        <div class="acc-body">
-          <div class="hint" id="refsHint"></div>
-          <div class="refs-box" id="refsBox"></div>
-          <div class="acc-actions">
-            <button class="btn btn-sm" id="addRef">${svg('plus')} 参考图</button>
-          </div>
+        <div class="seg" id="aspectSeg"></div>
+        <div class="seg" id="sizeSeg"></div>
+        <div class="res-custom">
+          <input class="input num" id="resW" type="number" inputmode="numeric" step="64" />
+          <span class="x">×</span>
+          <input class="input num" id="resH" type="number" inputmode="numeric" step="64" />
+          <button class="icon-btn" id="swapRes" title="交换宽高">${svg('swap')}</button>
         </div>
-      </section>
-
-      <div class="gen-bar">
-        <div class="cost-chip" id="costChip">免费</div>
-        <button class="btn btn-primary btn-gen" id="genBtn">${svg('bolt')} <span>生成图片</span></button>
-        <span class="queue-badge" id="queueBadge" hidden></span>
+        <div class="res-warn" id="resWarn"></div>
       </div>
     </aside>
 
@@ -285,7 +220,7 @@ function template() {
           <div class="stage-empty" id="stageEmpty">
             <div class="se-icon">${svg('spark')}</div>
             <div class="se-title">开始你的创作</div>
-            <div class="se-sub">填写提示词，点击下方「生成图片」</div>
+            <div class="se-sub">填写提示词，点击下方「生成」</div>
           </div>
           <div class="stage-progress" id="stageProgress" hidden>
             <img class="progress-thumb" id="progressThumb" alt="" />
@@ -298,6 +233,108 @@ function template() {
       </div>
       <div class="result-strip" id="resultStrip"></div>
     </section>
+
+    <div class="gen-settings-page" id="genSettings" hidden>
+      <div class="gsp-head">
+        <button class="icon-btn gsp-back" id="gspBack" title="返回">${svg('chevron')}</button>
+        <span class="gsp-title">生成设置</span>
+        <span class="gsp-sub" id="gspSub"></span>
+      </div>
+      <div class="gsp-body">
+        <div class="model-card card" id="modelCard">
+          <button class="model-btn" id="modelBtn">
+            <span class="model-badge" id="modelBadge">V5</span>
+            <span class="model-info">
+              <span class="model-name" id="modelName">V5 Full</span>
+              <span class="model-sub" id="modelSub"></span>
+            </span>
+            <span class="model-chevron">${svg('chevron')}</span>
+          </button>
+          <div class="model-toggles">
+            <button class="chip" id="effortBtn" title="Effort">Effort · High</button>
+            <button class="chip" id="furryBtn" title="Furry mode">Furry</button>
+            <button class="chip chip-ghost" id="transparentBtn" title="Transparent background">透明背景</button>
+          </div>
+        </div>
+
+        <div class="style-bar card">
+          <button class="style-pick" id="styleBtn">
+            <span class="style-mark">${svg('spark')}</span>
+            <span class="style-info">
+              <span class="style-caption">风格模板</span>
+              <span class="style-name" id="styleName">无风格</span>
+            </span>
+            <span class="style-chev">${svg('chevron')}</span>
+          </button>
+        </div>
+
+        <div class="mode-tabs" id="modeTabs">
+          <button class="mode-tab active" data-mode="t2i"><span>文生图</span></button>
+          <button class="mode-tab" data-mode="i2i"><span>图生图</span></button>
+          <button class="mode-tab" data-mode="inpaint"><span>局部重绘</span></button>
+        </div>
+
+        <div class="mode-panel" id="modePanel"></div>
+
+        <section class="acc open" id="advanced">
+          <button class="acc-head" type="button" data-acc>
+            <span class="acc-title">高级参数</span>
+            <span class="acc-badge" id="advBadge"></span>
+            <span class="acc-caret">${svg('chevron')}</span>
+          </button>
+          <div class="acc-body"><div class="adv-body" id="advancedBody"></div></div>
+        </section>
+
+        <section class="acc" id="vibesAcc">
+          <button class="acc-head" type="button" data-acc>
+            <span class="acc-title">Vibe 迁移 <em id="vibesCount">0</em></span>
+            <span class="acc-caret">${svg('chevron')}</span>
+          </button>
+          <div class="acc-body">
+            <div class="hint" id="vibesHint"></div>
+            <div class="vibes-box" id="vibesBox"></div>
+            <div class="acc-actions">
+              <button class="btn btn-sm" id="addVibe">${svg('plus')} 添加参考</button>
+              <button class="btn btn-sm" id="exportVibes">导出</button>
+              <button class="btn btn-sm" id="importVibeFile">导入 .naiv4vibe</button>
+            </div>
+            <div id="vibeNormalize"></div>
+          </div>
+        </section>
+
+        <section class="acc" id="refsAcc">
+          <button class="acc-head" type="button" data-acc>
+            <span class="acc-title">精准参考 Precise Ref <em id="refsCount">0</em></span>
+            <span class="acc-caret">${svg('chevron')}</span>
+          </button>
+          <div class="acc-body">
+            <div class="hint" id="refsHint"></div>
+            <div class="refs-box" id="refsBox"></div>
+            <div class="acc-actions">
+              <button class="btn btn-sm" id="addRef">${svg('plus')} 参考图</button>
+            </div>
+          </div>
+        </section>
+
+        <div class="gsp-links">
+          <button class="btn btn-sm" type="button" data-goto="gallery">图库</button>
+          <button class="btn btn-sm" type="button" data-goto="batch">批量矩阵</button>
+          <button class="btn btn-sm" type="button" data-goto="tools">工具</button>
+          <button class="btn btn-sm" type="button" data-goto="settings">应用设置</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="gen-dock" id="genDock">
+      <div class="dock-meta">
+        <span class="cost-chip" id="costChip">免费</span>
+        <span class="queue-badge" id="queueBadge" hidden></span>
+      </div>
+      <div class="dock-buttons">
+        <button class="btn dock-settings" id="settingsBtn">${svg('sliders')} 设置</button>
+        <button class="btn btn-primary btn-gen" id="genBtn">${svg('bolt')} <span>生成</span></button>
+      </div>
+    </div>
   </div>`;
 }
 
@@ -307,6 +344,15 @@ function bind(ui) {
   const { els } = ui;
 
   els.modelBtn.addEventListener('click', () => openModelSheet(ui));
+  els.settingsBtn.addEventListener('click', () => toggleGenSettings(ui));
+  els.gspBack.addEventListener('click', () => closeGenSettings(ui));
+  els.configSummary.addEventListener('click', () => openGenSettings(ui));
+  for (const b of $$('[data-goto]', ui.container)) {
+    b.addEventListener('click', () => {
+      closeGenSettings(ui);
+      ui.navigate?.('#/' + b.dataset.goto);
+    });
+  }
   els.importMetaBtn.addEventListener('click', () => pickMetaFile(ui));
   setupMetaDrop(ui);
   els.styleBtn.addEventListener('click', () => openStyleSheet(ui));
@@ -494,6 +540,29 @@ function setupMetaDrop(ui) {
   });
 }
 
+function openGenSettings(ui) {
+  ui.settingsOpen = true;
+  ui.els.genSettings.hidden = false;
+  document.body.classList.add('gsp-open');
+  ui.els.settingsBtn.classList.add('active');
+  hideSuggest(ui);
+  try {
+    ui.els.genSettings.scrollTop = 0;
+  } catch {}
+}
+
+function closeGenSettings(ui) {
+  ui.settingsOpen = false;
+  ui.els.genSettings.hidden = true;
+  document.body.classList.remove('gsp-open');
+  ui.els.settingsBtn.classList.remove('active');
+}
+
+function toggleGenSettings(ui) {
+  if (ui.settingsOpen) closeGenSettings(ui);
+  else openGenSettings(ui);
+}
+
 function renderAll(ui) {
   renderHeader(ui);
   renderStyleBar(ui);
@@ -538,10 +607,38 @@ function renderHeader(ui) {
   els.transparentBtn.classList.toggle('active', !!state.transparent);
 
   for (const b of $$('.mode-tab', els.modeTabs)) b.classList.toggle('active', b.dataset.mode === state.mode);
-  els.genBtn.querySelector('span').textContent = state.mode === 'inpaint' ? '局部重绘' : '生成图片';
+  els.genBtn.querySelector('span').textContent = state.mode === 'inpaint' ? '局部重绘' : '生成';
   els.genBtn.classList.toggle('busy', busy > 0);
 
+  const ep = effectiveParams(state);
+  const activeStyle = getActiveStyle(state, effectiveModel(state));
+  const modeLabel = state.mode === 'i2i' ? '图生图' : state.mode === 'inpaint' ? '局部重绘' : '文生图';
+  els.configSummaryText.textContent = `${model.label} · ${state.width} × ${state.height}`;
+  els.configSummarySub.textContent = [
+    modeLabel,
+    `${ep.steps} 步`,
+    `CFG ${Number(ep.scale).toFixed(1)}`,
+    activeStyle ? activeStyle.name : '无风格',
+  ].join(' · ');
+  if (els.gspSub) els.gspSub.textContent = `${model.label} · ${state.width}×${state.height} · ${ep.steps} 步`;
+  els.settingsBtn.classList.toggle('active', !!ui.settingsOpen);
+
   renderHeaderActions(ui);
+}
+
+function updateConfigSummary(ui) {
+  const model = MODEL_MAP[effectiveModel(state)] || MODELS[0];
+  const ep = effectiveParams(state);
+  const style = getActiveStyle(state, effectiveModel(state));
+  const modeLabel = state.mode === 'i2i' ? '图生图' : state.mode === 'inpaint' ? '局部重绘' : '文生图';
+  ui.els.configSummaryText.textContent = `${model.label} · ${state.width} × ${state.height}`;
+  ui.els.configSummarySub.textContent = [
+    modeLabel,
+    `${ep.steps} 步`,
+    `CFG ${Number(ep.scale).toFixed(1)}`,
+    style ? style.name : '无风格',
+  ].join(' · ');
+  if (ui.els.gspSub) ui.els.gspSub.textContent = `${model.label} · ${state.width}×${state.height} · ${ep.steps} 步`;
 }
 
 function renderStyleBar(ui) {
@@ -2066,6 +2163,8 @@ const queue = [];
 function renderStage(ui) {
   const { els } = ui;
   const r = activeResult();
+  const gen = ui.container.querySelector('.gen');
+  if (gen) gen.classList.toggle('no-result', !r);
   if (!r) {
     els.stageImg.hidden = true;
     els.stageEmpty.hidden = false;
@@ -2135,6 +2234,7 @@ async function enqueue(ui) {
   if (state.mode === 'i2i' && !state.baseImage) return toast('请先上传图生图底图', 'error');
 
   hideSuggest(ui);
+  closeGenSettings(ui);
   queue.push(1);
   updateQueue(ui);
   pump(ui);
@@ -2207,6 +2307,11 @@ async function runOne(ui) {
     renderStage(ui);
     renderStrip(ui);
     renderHeaderActions(ui);
+    if (window.matchMedia('(max-width: 959px)').matches) {
+      try {
+        ui.container.querySelector('.stage')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } catch {}
+    }
     setTimeout(() => hideProgress(ui), 400);
   } catch (e) {
     hideProgress(ui);
@@ -2375,6 +2480,7 @@ function updateCost(ui) {
     chip.classList.remove('free');
   }
   chip.title = `步数 ${ep.steps} · 张数 ${ep.sampleCount}${extra ? ` · 参考 +${extra}` : ''}`;
+  updateConfigSummary(ui);
 }
 
 /* ------------------------------------------------------------------- sheets */

@@ -2,7 +2,7 @@
 
 import { state, init, tierName, save } from './state.js';
 import { $, el, svg, setLang } from './util.js';
-import { toast } from './ui.js';
+import { toast, modal } from './ui.js';
 import { loadPlugins } from './plugins.js';
 import { getUserData } from './api.js';
 import { authGate, renderLogin } from './auth.js';
@@ -72,6 +72,7 @@ function renderShell() {
         <span class="brand-name">NovelAI <b>Studio</b></span>
       </div>
       <div class="header-actions">
+        <button class="icon-btn" id="menuBtn" title="菜单">${svg('grid')}</button>
         <button class="chip account-chip" id="accountChip"></button>
         <button class="icon-btn" id="themeBtn" title="切换主题">${svg('moon')}</button>
       </div>
@@ -97,6 +98,27 @@ function renderShell() {
     import('./state.js').then((m) => m.save());
   });
   $('#accountChip').addEventListener('click', () => navigate('#/settings'));
+  $('#menuBtn').addEventListener('click', () => {
+    const items = [
+      ['生成', 'generate', 'bolt'],
+      ['图库', 'gallery', 'image'],
+      ['批量矩阵', 'batch', 'grid'],
+      ['工具', 'tools', 'wand'],
+      ['应用设置', 'settings', 'settings'],
+    ];
+    const body = el('div', { class: 'director-sheet' });
+    const m = modal({ title: '菜单', body });
+    for (const [label, route, icon] of items) {
+      const b = el('button', { class: 'director-row' },
+        el('span', { class: 'dir-icon', html: svg(icon) }),
+        el('span', { class: 'dir-main' }, el('span', { class: 'dir-name' }, label)));
+      b.addEventListener('click', () => {
+        m.close();
+        navigate('#/' + route);
+      });
+      body.append(b);
+    }
+  });
   $('#goSettings').addEventListener('click', () => navigate('#/settings'));
   document.querySelectorAll('[data-tab]').forEach((b) => {
     b.addEventListener('click', () => navigate('#/' + b.dataset.tab));
@@ -152,6 +174,7 @@ function onHash() {
 
 function renderRoute(name) {
   current = name;
+  document.body.dataset.route = name;
   const view = $('#view');
   if (!view) return;
   document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
