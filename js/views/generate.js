@@ -46,6 +46,9 @@ function characterLabel(i) {
 }
 
 export function mount(container, opts = {}) {
+  const hadChars = state.characters.length;
+  state.characters = state.characters.filter((c) => (c.prompt || '').trim() || (c.uc || '').trim());
+  if (hadChars !== state.characters.length) save();
   container.innerHTML = template();
   const els = {
     settingsBtn: $('#settingsBtn', container),
@@ -161,7 +164,7 @@ function template() {
 
       <div class="card prompt-card">
         <div class="card-head">
-          <span class="card-title">提示词</span>
+          <span class="card-title">主提示词</span>
           <div class="card-head-right">
             <button class="icon-btn" id="importMetaBtn" title="从图片导入元数据">${svg('upload')}</button>
             <span class="counter" id="tokenCount">0</span>
@@ -198,7 +201,7 @@ function template() {
         </div>
       </div>
 
-      <section class="acc open" id="charsAcc">
+      <section class="acc ${state.characters.length ? 'open' : ''}" id="charsAcc">
         <button class="acc-head" type="button" data-acc>
           <span class="acc-title">多角色提示词 / 位置 <em id="charsCount">0</em></span>
           <span class="acc-caret">${svg('chevron')}</span>
@@ -1547,7 +1550,7 @@ function renderCharacters(ui) {
           save();
           renderCharacters(ui);
         }, '删除')));
-    const prompt = el('textarea', { class: 'char-prompt', rows: 2, placeholder: 'girl, red hair, ...' });
+    const prompt = el('textarea', { class: 'char-prompt', rows: 2, placeholder: `角色 ${characterLabel(i)} 提示词（可选）` });
     prompt.value = c.prompt || '';
     prompt.addEventListener('input', () => {
       state.characters[i].prompt = prompt.value;
