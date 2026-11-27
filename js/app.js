@@ -175,6 +175,7 @@ function renderRoute(name) {
   if (!view) return;
   document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
   document.querySelectorAll('body > #tagPop').forEach((n) => { n.hidden = true; });
+  document.querySelectorAll('body > .gen-dock').forEach((n) => n.remove());
   view.innerHTML = '';
   view.className = `view view-${name}`;
   const route = routes[name];

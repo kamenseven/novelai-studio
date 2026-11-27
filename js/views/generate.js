@@ -91,6 +91,7 @@ export function mount(container, opts = {}) {
     refsHint: $('#refsHint', container),
     modePanel: $('#modePanel', container),
     cost: $('#costChip', container),
+    genDock: $('#genDock', container),
     genBtn: $('#genBtn', container),
     queueBadge: $('#queueBadge', container),
     stageImg: $('#stageImg', container),
@@ -119,7 +120,9 @@ export function mount(container, opts = {}) {
 
   const ui = { els, container, navigate: opts.navigate };
   document.querySelectorAll('body > #tagPop').forEach((n) => n.remove());
+  document.querySelectorAll('body > .gen-dock').forEach((n) => n.remove());
   if (els.tagPop) document.body.append(els.tagPop);
+  if (els.genDock) document.body.append(els.genDock);
   subscribe((type) => {
     if (!container.isConnected) return;
     if (type === 'results') {
@@ -140,6 +143,22 @@ function template() {
   return `
   <div class="gen">
     <aside class="controls" id="controls">
+      <div class="card res-card">
+        <div class="card-head">
+          <span class="card-title">图片尺寸</span>
+          <span class="res-label" id="resLabel">832 × 1216</span>
+        </div>
+        <div class="seg" id="aspectSeg"></div>
+        <div class="seg" id="sizeSeg"></div>
+        <div class="res-custom">
+          <input class="input num" id="resW" type="number" inputmode="numeric" step="64" />
+          <span class="x">×</span>
+          <input class="input num" id="resH" type="number" inputmode="numeric" step="64" />
+          <button class="icon-btn" id="swapRes" title="交换宽高">${svg('swap')}</button>
+        </div>
+        <div class="res-warn" id="resWarn"></div>
+      </div>
+
       <div class="card prompt-card">
         <div class="card-head">
           <span class="card-title">提示词</span>
@@ -179,7 +198,7 @@ function template() {
         </div>
       </div>
 
-      <section class="acc" id="charsAcc">
+      <section class="acc open" id="charsAcc">
         <button class="acc-head" type="button" data-acc>
           <span class="acc-title">多角色提示词 / 位置 <em id="charsCount">0</em></span>
           <span class="acc-caret">${svg('chevron')}</span>
@@ -193,21 +212,6 @@ function template() {
         </div>
       </section>
 
-      <div class="card res-card">
-        <div class="card-head">
-          <span class="card-title">图片尺寸</span>
-          <span class="res-label" id="resLabel">832 × 1216</span>
-        </div>
-        <div class="seg" id="aspectSeg"></div>
-        <div class="seg" id="sizeSeg"></div>
-        <div class="res-custom">
-          <input class="input num" id="resW" type="number" inputmode="numeric" step="64" />
-          <span class="x">×</span>
-          <input class="input num" id="resH" type="number" inputmode="numeric" step="64" />
-          <button class="icon-btn" id="swapRes" title="交换宽高">${svg('swap')}</button>
-        </div>
-        <div class="res-warn" id="resWarn"></div>
-      </div>
     </aside>
 
     <section class="stage">
@@ -327,13 +331,14 @@ function template() {
     </div>
 
     <div class="gen-dock" id="genDock">
-      <div class="dock-meta">
-        <span class="cost-chip" id="costChip">免费</span>
-        <span class="queue-badge" id="queueBadge" hidden></span>
-      </div>
       <div class="dock-buttons">
         <button class="btn dock-settings" id="settingsBtn">${svg('sliders')} 设置</button>
-        <button class="btn btn-primary btn-gen" id="genBtn">${svg('bolt')} <span>生成</span></button>
+        <button class="btn btn-primary btn-gen" id="genBtn">
+          ${svg('bolt')}
+          <span class="gen-label">生成</span>
+          <span class="gen-cost" id="costChip">免费 · Opus</span>
+          <span class="queue-badge" id="queueBadge" hidden></span>
+        </button>
       </div>
     </div>
   </div>`;
@@ -608,7 +613,7 @@ function renderHeader(ui) {
   els.transparentBtn.classList.toggle('active', !!state.transparent);
 
   for (const b of $$('.mode-tab', els.modeTabs)) b.classList.toggle('active', b.dataset.mode === state.mode);
-  els.genBtn.querySelector('span').textContent = state.mode === 'inpaint' ? '局部重绘' : '生成';
+  els.genBtn.querySelector('.gen-label').textContent = state.mode === 'inpaint' ? '局部重绘' : '生成';
   els.genBtn.classList.toggle('busy', busy > 0);
 
   const ep = effectiveParams(state);
@@ -1040,7 +1045,7 @@ function autoGrowArea(ta, min = 54) {
 }
 
 function autoGrowPrompt(ui) {
-  autoGrowArea(ui.els.prompt, 120);
+  autoGrowArea(ui.els.prompt, 84);
 }
 
 let assistTimer;
@@ -1546,14 +1551,14 @@ function renderCharacters(ui) {
     prompt.value = c.prompt || '';
     prompt.addEventListener('input', () => {
       state.characters[i].prompt = prompt.value;
-      autoGrowArea(prompt, 54);
+      autoGrowArea(prompt, 46);
       save();
     });
     const uc = el('textarea', { class: 'char-uc', rows: 1, placeholder: '该角色的负面提示词（可选）' });
     uc.value = c.uc || '';
     uc.addEventListener('input', () => {
       state.characters[i].uc = uc.value;
-      autoGrowArea(uc, 44);
+      autoGrowArea(uc, 38);
       save();
     });
     const posBtn = el('button', { class: 'btn btn-xs' },
@@ -1562,8 +1567,8 @@ function renderCharacters(ui) {
     posBtn.addEventListener('click', () => openPositionEditor(ui, i));
     card.append(head, prompt, uc, posBtn);
     els.charsBox.append(card);
-    autoGrowArea(prompt, 54);
-    autoGrowArea(uc, 44);
+    autoGrowArea(prompt, 46);
+    autoGrowArea(uc, 38);
   });
   if (!state.characters.length) {
     els.charsBox.append(el('div', { class: 'hint' }, '添加角色提示词，可分别描述多个角色并指定位置。'));
