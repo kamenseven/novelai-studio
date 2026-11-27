@@ -1673,6 +1673,7 @@ function openPositionEditor(ui, i) {
           onclick: () => {
             c.x = x;
             c.y = y;
+            state.charPosMode = 'custom';
             save();
             for (const cell of cells) cell.classList.remove('active');
             b.classList.add('active');
@@ -1706,6 +1707,7 @@ function openPositionEditor(ui, i) {
     current.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       dragging = true;
+      state.charPosMode = 'custom';
       try {
         current.setPointerCapture(e.pointerId);
       } catch {}

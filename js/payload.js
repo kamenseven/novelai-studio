@@ -56,7 +56,9 @@ export async function buildRequest(state, { baseImage, mask, actionOverride } = 
   const customPos = state.charPosMode === 'custom' && caps.charMax > 0;
   const charCaptions = chars.map((c) => ({
     char_caption: c.prompt.trim(),
-    centers: customPos ? [{ x: Number(c.x) || 0.5, y: Number(c.y) || 0.5 }] : [],
+    // The API requires non-empty centers even when use_coords is false;
+    // with use_coords false the model ignores them (AI's Choice).
+    centers: [{ x: Number(c.x ?? 0.5) || 0.5, y: Number(c.y ?? 0.5) || 0.5 }],
   }));
   const characterPrompts = chars.map((c) => ({
     prompt: c.prompt.trim(),
@@ -68,7 +70,7 @@ export async function buildRequest(state, { baseImage, mask, actionOverride } = 
     .filter((c) => (c.uc || '').trim())
     .map((c) => ({
       char_caption: c.uc.trim(),
-      centers: customPos ? [{ x: Number(c.x) || 0.5, y: Number(c.y) || 0.5 }] : [],
+      centers: [{ x: Number(c.x ?? 0.5) || 0.5, y: Number(c.y ?? 0.5) || 0.5 }],
     }));
 
   const params = {
