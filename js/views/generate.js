@@ -123,9 +123,7 @@ export function mount(container, opts = {}) {
   };
 
   const ui = { els, container, navigate: opts.navigate };
-  document.querySelectorAll('body > #tagPop').forEach((n) => n.remove());
   document.querySelectorAll('body > .gen-dock').forEach((n) => n.remove());
-  if (els.tagPop) document.body.append(els.tagPop);
   if (els.genDock) document.body.append(els.genDock);
   subscribe((type) => {
     if (!container.isConnected) return;
@@ -337,6 +335,9 @@ function template() {
 
     <div class="gen-dock" id="genDock">
       <div class="dock-buttons">
+        <button class="dock-nav" type="button" data-goto="gallery">图库</button>
+        <button class="dock-nav" type="button" data-goto="batch">批量</button>
+        <button class="dock-nav" type="button" data-goto="tools">工具</button>
         <button class="btn dock-settings" id="settingsBtn">${svg('sliders')} 设置</button>
         <button class="btn btn-primary btn-gen" id="genBtn">
           ${svg('bolt')}
@@ -359,6 +360,12 @@ function bind(ui) {
   els.gspBack.addEventListener('click', () => closeGenSettings(ui));
   els.gspLogout?.addEventListener('click', () => logout());
   for (const b of $$('[data-goto]', ui.container)) {
+    b.addEventListener('click', () => {
+      closeGenSettings(ui);
+      ui.navigate?.('#/' + b.dataset.goto);
+    });
+  }
+  for (const b of $$('[data-goto]', els.genDock)) {
     b.addEventListener('click', () => {
       closeGenSettings(ui);
       ui.navigate?.('#/' + b.dataset.goto);
@@ -2481,19 +2488,6 @@ function showSuggest(ui, items, frag) {
       meta);
     pop.append(b);
   });
-  requestAnimationFrame(() => ensurePromptVisible(ui));
-  setTimeout(() => ensurePromptVisible(ui), 220);
-}
-
-function ensurePromptVisible(ui) {
-  const pop = ui.els.tagPop;
-  const ta = ui.els.prompt;
-  if (!pop || !ta || pop.hidden) return;
-  const vh = window.visualViewport?.height || window.innerHeight;
-  const popTop = vh - pop.getBoundingClientRect().height;
-  const rect = ta.getBoundingClientRect();
-  const overlap = rect.bottom - (popTop - 12);
-  if (overlap > 0) window.scrollBy({ top: overlap, behavior: 'smooth' });
 }
 
 function hideSuggest(ui) {
